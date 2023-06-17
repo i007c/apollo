@@ -4,7 +4,7 @@ CFLAGS = -std=c11 -O3 -g -Wall -Wextra -Wpedantic -Wstrict-aliasing
 CFLAGS += -Wno-pointer-arith -Wno-newline-eof -Wno-unused-parameter
 CFLAGS += -Wno-gnu-statement-expression -Wno-gnu-compound-literal-initializer 
 CFLAGS += -Wno-gnu-zero-variadic-macro-arguments -Isrc/include/
-LDFLAGS = -lm -ldl -lpthread -lGL -lX11 -lpthread -lXrandr -lXi -ldl
+LDFLAGS = -lm -ldl -lpthread -lGL -lGLU -lglut -lX11 -lpthread -lXrandr -lXi -ldl
 
 SRC =  $(wildcard src/**/*.c) $(wildcard src/*.c)
 SRC += $(wildcard src/**/**/*.c) $(wildcard src/**/**/**/*.c)
