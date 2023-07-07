@@ -5,7 +5,8 @@
 
 #define MESSAGE_MAX 8196
 #define INFO_MAX 512
-#define PATH_MAX 40
+#define NAME_MAX 50
+#define PATH_MAX NAME_MAX + 15
 
 
 typedef struct DateTime {
@@ -20,7 +21,7 @@ typedef struct DateTime {
 
 typedef struct SectorFile {
     FILE *file;
-    const char name[PATH_MAX - 15];
+    char name[NAME_MAX];
     char path[PATH_MAX];
 } SectorFile;
 
@@ -30,27 +31,20 @@ static uint8_t sector_file_day = 0;
 
 static SectorFile SECTORS[] = {
     [SECTOR_MAIN / 100]   = { NULL, "main",   "" },
-    // [SECTOR_USER / 100]   = { NULL, "user",   "" },
-    // [SECTOR_ADMIN / 100]  = { NULL, "admin",  "" },
-    // [SECTOR_SERVER / 100] = { NULL, "server", "" },
-    // [SECTOR_EATERY / 100] = { NULL, "eatery", "" },
-    // [SECTOR_DETAIL / 100] = { NULL, "detail", "" },
 };
 
 static char* SUB_SECTOR_NAMES[] = {
     [SECTOR_MAIN_APOLLO]         = "apollo",
-    // [SECTOR_USER_PHONE]       = "phone",
-    // [SECTOR_EATERY_DISH]      = "dish",
-    // [SECTOR_EATERY_REVIEW]    = "review",
 };
 
-static void make_dirs() {
-    char dirname[PATH_MAX - 10];
+static void make_dirs(void) {
+    char dirname[NAME_MAX + 5] = "logs/";
 
     mkdir("logs", 0755);
 
     for (uint8_t i = 0; i < SECTOR_LENGTH / 100; i++) {
-        snprintf(dirname, sizeof(dirname), "logs/%s", SECTORS[i].name);
+        memcpy(&dirname[5], SECTORS[i].name, NAME_MAX);
+        // snprintf(dirname, sizeof(dirname), "logs/%s", SECTORS[i].name);
         mkdir(dirname, 0755);
     }
 }
@@ -76,12 +70,13 @@ static void get_datetime(DateTime *datetime) {
 static void update_sectors(DateTime *datetime) {
     bool called_make_dirs = false;
     FILE *fd = NULL;
+    size_t path_len = 0;
 
     for (uint8_t i = 0; i < SECTOR_LENGTH / 100; i++) {
-        snprintf(
-            SECTORS[i].path, PATH_MAX, "logs/%s/%02d.log", 
-            SECTORS[i].name, datetime->week
-        );
+        strcpy(SECTORS[i].path, "logs/");
+        memcpy(&SECTORS[i].path[5], SECTORS[i].name, NAME_MAX);
+        path_len = strlen(SECTORS[i].path);
+        snprintf(&SECTORS[i].path[path_len], 8, "%02d.log", datetime->week);
 
         fd = fopen(SECTORS[i].path, "a");
         if (!called_make_dirs && fd == NULL && errno == ENOENT) {
