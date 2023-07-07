@@ -1,37 +1,39 @@
 
 CC = gcc
-CFLAGS = -std=c11 -O3 -g -Wall -Wextra -Wpedantic -Wstrict-aliasing
-CFLAGS += -Wno-pointer-arith -Wno-newline-eof -Wno-unused-parameter
-CFLAGS += -Wno-gnu-statement-expression -Wno-gnu-compound-literal-initializer 
-CFLAGS += -Wno-gnu-zero-variadic-macro-arguments -Isrc/include/
-LDFLAGS = -lm -ldl -lpthread -lGL -lGLU -lglut -lX11 -lpthread -lXrandr -lXi -ldl
+CFLAGS  = -std=c11 -Os -g -pedantic -Wall -Wextra -Wpedantic -Werror
+CFLAGS += -Isrc/include/ 
 
-SRC =  $(wildcard src/**/*.c) $(wildcard src/*.c)
-SRC += $(wildcard src/**/**/*.c) $(wildcard src/**/**/**/*.c)
-OBJ = $(SRC:.c=.o)
-BIN = bin
+LDFLAGS = -lGL -lGLU -lglut -lGLEW -lglfw # -ldl -lm -lXrandr -lXi -lX11 -lpthread
+
+SOURCES = $(shell find src -type f -name "*.c" -not -path "src/.ccls-cache/*")
+HEADERS = $(shell find src -type f -name "*.h" -not -path "src/.ccls-cache/*")
+OBJECTS = $(addprefix build/, $(SOURCES:.c=.o))
+EXEC = bin/apollo
 
 
-all: clear dirs apollo
+${EXEC}: clear ${OBJECTS}
+	mkdir -p $(@D)
+	${CC} -o $@ ${OBJECTS} ${LDFLAGS}
 
-dirs:
-	mkdir -p ./$(BIN)
 
-run: all
-	$(BIN)/apollo
+build/%.o: %.c ${HEADERS}
+	@mkdir -p ${@D}
+	@${CC} -c ${CFLAGS} $< -o $@
+	@echo $<
 
-apollo: $(OBJ)
-	$(CC) -o $(BIN)/apollo $^ $(LDFLAGS)
 
-%.o: %.c
-	@$(CC) -o $@ -c $< $(CFLAGS)
+run: clear ${EXEC}
+	${EXEC}
+
 
 clean:
-	rm -rf $(BIN) $(OBJ)
+	rm -rf ${EXEC} ${OBJECTS}
+
 
 clear:
 	printf "\E[H\E[3J"
 	clear
 
 .PHONY: clear run clean
-.SILENT: clear run dirs apollo clean
+.SILENT: clear run clean ${EXEC}
+
