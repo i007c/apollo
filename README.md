@@ -10,15 +10,23 @@ a game engine
 
 ## ref
 
-https://www.glfw.org/
-https://glew.sourceforge.net/
-https://wiki.archlinux.org/title/OpenGL
+### api
 
-https://www.khronos.org/developers/reference-cards/
-https://learnopengl.com/
-https://ogldev.org/
-http://www.opengl-tutorial.org/
+-   https://www.glfw.org/
+-   https://glew.sourceforge.net/
+-   https://wiki.archlinux.org/title/OpenGL
 
-https://glad.dav1d.de/
+### tutorial
 
-https://github.com/roshanpoudyal/3D_interactive_graphics_rendering_engine
+-   https://www.khronos.org/developers/reference-cards/
+-   https://learnopengl.com/
+-   https://ogldev.org/
+-   http://www.opengl-tutorial.org/
+
+### glad generator
+
+-   https://glad.dav1d.de/
+
+### sample code
+
+-   https://github.com/roshanpoudyal/3D_interactive_graphics_rendering_engine
