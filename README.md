@@ -8,7 +8,7 @@ a game engine
 -   [ ] learn a lot about opengl / nvida cuda / amd? ...
         and all graphics related stuff
 
-## ref
+## References
 
 ### api
 
