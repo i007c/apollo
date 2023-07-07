@@ -28,9 +28,19 @@
 #include <sys/un.h>
 #include <sys/types.h>
 
+#include <GL/glew.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
 #include <GL/glut.h>
 
-#include "logger.h"
+// #include <glad/glad.h>
+#include <GLFW/glfw3.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+    #define UNUSED(name) _unused_ ## name __attribute__((unused))
+#else
+    #define UNUSED(name) _unused_ ## name
+#endif
 
 typedef enum status_t {
     STS_SUCCESS = 0,
