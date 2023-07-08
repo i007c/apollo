@@ -6,7 +6,7 @@
 #define MESSAGE_MAX 8196
 #define INFO_MAX 512
 #define NAME_MAX 50
-#define PATH_MAX NAME_MAX + 15
+#define PATH_MAX NAME_MAX + 16
 
 
 typedef struct DateTime {
@@ -70,13 +70,14 @@ static void get_datetime(DateTime *datetime) {
 static void update_sectors(DateTime *datetime) {
     bool called_make_dirs = false;
     FILE *fd = NULL;
-    size_t path_len = 0;
 
     for (uint8_t i = 0; i < SECTOR_LENGTH / 100; i++) {
         strcpy(SECTORS[i].path, "logs/");
         memcpy(&SECTORS[i].path[5], SECTORS[i].name, NAME_MAX);
-        path_len = strlen(SECTORS[i].path);
-        snprintf(&SECTORS[i].path[path_len], 8, "%02d.log", datetime->week);
+        snprintf(
+            &SECTORS[i].path[strlen(SECTORS[i].path)],
+            9, "/%02d.log", datetime->week
+        );
 
         fd = fopen(SECTORS[i].path, "a");
         if (!called_make_dirs && fd == NULL && errno == ENOENT) {
