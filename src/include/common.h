@@ -12,6 +12,8 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
+#include <assert.h>
+#include <math.h>
 #include <time.h>
 #include <inttypes.h>
 #include <string.h>
@@ -41,6 +43,8 @@
 #else
     #define UNUSED(name) _unused_ ## name
 #endif
+
+#define LEN(x) sizeof(x) / sizeof(x[0])
 
 typedef enum status_t {
     STS_SUCCESS = 0,
