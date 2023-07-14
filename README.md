@@ -15,6 +15,7 @@ a game engine
 -   https://www.glfw.org/
 -   https://glew.sourceforge.net/
 -   https://wiki.archlinux.org/title/OpenGL
+-   https://docs.gl
 
 ### tutorial
 
