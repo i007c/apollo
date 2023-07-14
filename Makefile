@@ -1,9 +1,11 @@
 
 CC = gcc
 CFLAGS  = -std=c11 -Os -g -pedantic -Wall -Wextra -Wpedantic -Werror
-CFLAGS += -Isrc/include/ 
+CFLAGS += -Isrc/include/  -Icglm/include/
 
-LDFLAGS = -lGL -lGLU -lglut -lGLEW -lglfw # -ldl -lm -lXrandr -lXi -lX11 -lpthread
+LDFLAGS = -lGL -lGLU -lGLEW -lglfw -lm
+# -ldl -lXrandr -lXi -lX11 -lpthread
+# -lglut 
 
 SOURCES = $(shell find src -type f -name "*.c" -not -path "src/.ccls-cache/*")
 HEADERS = $(shell find src -type f -name "*.h" -not -path "src/.ccls-cache/*")
