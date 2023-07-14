@@ -11,6 +11,7 @@
 typedef enum {
     SECTOR_MAIN                   = 000,
     SECTOR_MAIN_APOLLO            = 001,
+    SECTOR_MAIN_SHADER            = 002,
     // SECTOR_USER                   = 100,
     // SECTOR_USER_AGENT             = 101,
     // SECTOR_USER_PHONE             = 102,

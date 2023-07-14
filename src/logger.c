@@ -35,6 +35,7 @@ static SectorFile SECTORS[] = {
 
 static char* SUB_SECTOR_NAMES[] = {
     [SECTOR_MAIN_APOLLO]         = "apollo",
+    [SECTOR_MAIN_SHADER]         = "shader",
 };
 
 static void make_dirs(void) {
