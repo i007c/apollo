@@ -34,13 +34,13 @@ typedef enum {
     LF_BRAK,
 } Flag;
 
-#define log_verbose(...)  logger(LS, LF_VERB,  __VA_ARGS__)
-#define log_info(...)     logger(LS, LF_INFO,  __VA_ARGS__)
-#define log_warn(...)     logger(LS, LF_WARN,  __VA_ARGS__)
-#define log_debug(...)    logger(LS, LF_DBUG,  __VA_ARGS__)
-#define log_error(...)    logger(LS, LF_EROR,  __VA_ARGS__)
-#define log_trace(...)    logger(LS, LF_EROR,  LOG_THROW_LOCATION __VA_ARGS__)
-#define log_break()       logger(LS, LF_BRAK,  "")
+#define log_verbose(...)  logger(LS, LF_VERB, __VA_ARGS__)
+#define log_info(...)     logger(LS, LF_INFO, __VA_ARGS__)
+#define log_warn(...)     logger(LS, LF_WARN, __VA_ARGS__)
+#define log_debug(...)    logger(LS, LF_DBUG, __VA_ARGS__)
+#define log_error(...)    logger(LS, LF_EROR, __VA_ARGS__)
+#define log_trace(...)    logger(LS, LF_EROR, LOG_THROW_LOCATION __VA_ARGS__)
+#define log_break()       logger(LS, LF_BRAK, "")
 
 void logger(const Sector index, const Flag flag, const char *format, ...);
 
