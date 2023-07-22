@@ -8,4 +8,4 @@ gcc
 -Wpedantic
 -Werror
 -Isrc/include/
--Icglm/include/
+-Ilib/
