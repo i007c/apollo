@@ -1,7 +1,7 @@
 
 CC = gcc
 CFLAGS  = -std=c11 -Os -g -pedantic -Wall -Wextra -Wpedantic -Werror
-CFLAGS += -Isrc/include/  -Icglm/include/
+CFLAGS += -Isrc/include/  -Ilib/
 
 LDFLAGS = -lGL -lGLU -lGLEW -lglfw -lm
 # -ldl -lXrandr -lXi -lX11 -lpthread
