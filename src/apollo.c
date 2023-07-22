@@ -6,26 +6,39 @@
 
 #define LS SECTOR_MAIN_APOLLO
 #define PI180 0.017453292519943295
+#define PF "\033[32m%f\033[0m"
 
-// #define DONKEYOBJ_IMPLEMENTATION
-// #include "donkeyobj.h"
+#define DONKEYOBJ_IMPLEMENTATION
+#include "donkeyobj.h"
 
 static int width = 1080;
 static int height = 720;
 
-// void trackball(float q[4], float p1x, float p1y, float p2x, float p2y);
-// void negate_quat(float *q, float *qn);
-// void add_quats(vec4 q1, vec4 q2, vec4 dest);
-//
-// void build_rotmatrix(float m[4][4], const float q[4]);
-// void axis_to_quat(float a[3], float phi, float q[4]);
-// #define TRACKBALLSIZE (0.8)
-// static float tb_project_to_sphere(float, float, float);
-// static void normalize_quat(float[4]);
 
-// static vec3 eye;
-// static vec3 center;
-// static vec3 up;
+
+//////////////////////////////
+
+void trackball(float q[4], float p1x, float p1y, float p2x, float p2y);
+void negate_quat(float *q, float *qn);
+void add_quats(vec4 q1, vec4 q2, vec4 dest);
+void build_rotmatrix(float m[4][4], const float q[4]);
+void axis_to_quat(float a[3], float phi, float q[4]);
+
+#define TRACKBALLSIZE (0.6)
+static float tb_project_to_sphere(float, float, float);
+static void normalize_quat(float[4]);
+
+static vec3 eye;
+static vec3 center;
+static vec3 up;
+
+static float move_speed = 256.0f;
+
+static vec4 curr_quat;
+static vec4 prev_quat;
+
+
+//////////////////////////////
 
 static bool mouse_left_pressed = false;
 static bool mouse_middle_pressed = false;
@@ -36,26 +49,45 @@ static bool mouse_right_pressed = false;
 static float mouse_x_last = 0;
 static float mouse_y_last = 0;
 
-vec3 cam_position;
-vec3 cam_front;
-vec3 cam_up;
-vec3 cam_right;
-vec3 cam_world_up;
-// euler Angles
-float cam_yaw = -90;
-float cam_pitch = 0;
-// camera options
-float cam_mouse_sensitivity = 0.0001;
-float cam_zoom = 45;
+static uint32_t zoom = 100;
 
-// static vec4 curr_quat;
-// static vec4 prev_quat;
-
-vec3 cam_temp;
+// vec3 cam_position;
+// vec3 cam_front;
+// vec3 cam_up;
+// vec3 cam_right;
+// vec3 cam_world_up;
+// // euler Angles
+// float cam_yaw = -90;
+// float cam_pitch = -10;
+// // camera options
+// float cam_mouse_sensitivity = 0.0001;
+// float cam_key_sensitivity = 1.2;
+// float cam_fov = 45;
+//
+// vec3 cam_temp;
 
 static void click_callback(GLFWwindow* window, int button, int action, int mods);
 static void motion_callback(GLFWwindow* window, double mouse_x, double mouse_y);
 static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+
+
+// void cam_logger(void) {
+//     log_verbose(
+//         "\ncam {\n  temp: [ "PF", "PF", "PF" ]\n  yaw: "PF"\n  pitch: "PF"\n"
+//         "  position: [ "PF", "PF", "PF" ]\n  front: [ "PF", "PF", "PF" ]\n"
+//         "  right: [ "PF", "PF", "PF" ]\n  up: [ "PF", "PF", "PF" ]\n"
+//         "  world_up: [ "PF", "PF", "PF" ]\n  zoom: "PF"\n}\n",
+//         cam_temp[0], cam_temp[1], cam_temp[2],
+//         cam_yaw, cam_pitch,
+//         cam_position[0], cam_position[1], cam_position[2],
+//         cam_front[0], cam_front[1], cam_front[2],
+//         cam_right[0], cam_right[1], cam_right[2],
+//         cam_up[0], cam_up[1], cam_up[2],
+//         cam_world_up[0], cam_world_up[1], cam_world_up[2],
+//         cam_fov
+//     );
+// }
 
 void key_callback(
     GLFWwindow *win, int key,
@@ -69,28 +101,44 @@ void key_callback(
                 break;
 
             case GLFW_KEY_W:
-                // vec3 dest;
-                // glm_vec3_scale(cam_front, 2.5, dest);
-                glm_vec3_muladds(cam_front, 2.5, cam_position);
-                log_verbose("pos: { %f, %f, %f }", cam_position[0], cam_position[1], cam_position[2]);
+                eye[1] -= move_speed / height;
+                center[1] -= move_speed / height;
                 break;
             case GLFW_KEY_S:
-                glm_vec3_scale(cam_front, 2.5, cam_temp);
-                glm_vec3_sub(cam_position, cam_temp, cam_position);
-                log_verbose("pos: { %f, %f, %f }", cam_position[0], cam_position[1], cam_position[2]);
+                eye[1] += move_speed / height;
+                center[1] += move_speed / height;
                 break;
 
-            case GLFW_KEY_D:
-                glm_vec3_muladds(cam_right, 2.5, cam_position);
-
-                log_verbose("pos: { %f, %f, %f }", cam_position[0], cam_position[1], cam_position[2]);
-                break;
             case GLFW_KEY_A:
-                glm_vec3_scale(cam_right, 2.5, cam_temp);
-                glm_vec3_sub(cam_position, cam_temp, cam_position);
-
-                log_verbose("pos: { %f, %f, %f }", cam_position[0], cam_position[1], cam_position[2]);
+                eye[0] += move_speed / width;
+                center[0] +=  move_speed / width;
                 break;
+            case GLFW_KEY_D:
+                eye[0] -= move_speed / width;
+                center[0] -= move_speed / width;
+                break;
+
+            // case GLFW_KEY_L:
+            //     cam_logger();
+            //     break;
+            //
+            // case GLFW_KEY_W:
+            //     glm_vec3_muladds(cam_front, cam_key_sensitivity, cam_position);
+            //     break;
+            //
+            // case GLFW_KEY_S:
+            //     glm_vec3_scale(cam_front, cam_key_sensitivity, cam_temp);
+            //     glm_vec3_sub(cam_position, cam_temp, cam_position);
+            //     break;
+            //
+            // case GLFW_KEY_D:
+            //     glm_vec3_muladds(cam_right, cam_key_sensitivity, cam_position);
+            //     break;
+            //
+            // case GLFW_KEY_A:
+            //     glm_vec3_scale(cam_right, cam_key_sensitivity, cam_temp);
+            //     glm_vec3_sub(cam_position, cam_temp, cam_position);
+            //     break;
 
         // if (direction == FORWARD)
         //     Position += Front * velocity;
@@ -147,6 +195,8 @@ void debug_message(
 int main(void) {
     log_info("Starting Apollo");
 
+    srand(time(NULL));
+
     glfwInit();
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -181,86 +231,84 @@ int main(void) {
 
     glEnable(GL_DEPTH_TEST);
     
-    // trackball(curr_quat, 0, 0, 0, 0);
+    trackball(curr_quat, 0, 0, 0, 0);
+
+    eye[0] = 0.0f;
+    eye[1] = 0.0f;
+    eye[2] = 10.0f;
+
+    center[0] = 0.0f;
+    center[1] = 0.0f;
+    center[2] = 0.0f;
+
+    up[0] = 0.0f;
+    up[1] = 1.0f;
+    up[2] = 0.0f;
+
+    // eye[0] -= (float)width / 400;
+    // center[0] -= (float)width / 400;
     //
-    // eye[0] = 0.0f;
-    // eye[1] = 0.0f;
-    // eye[2] = 3.0f;
+    // eye[1] -= (float)height / 400;
+    // center[1] -= (float)height / 400;
+
+
+    // cam_world_up[0] = 0;
+    // cam_world_up[1] = 1;
+    // cam_world_up[2] = 0;
     //
-    // center[0] = 0.0f;
-    // center[1] = 0.0f;
-    // center[2] = 0.0f;
+    // cam_position[0] = 0;
+    // cam_position[1] = 0;
+    // cam_position[2] = 3;
     //
-    // up[0] = 0.0f;
-    // up[1] = 1.0f;
-    // up[2] = 0.0f;
+    // cam_front[0] = 0;
+    // cam_front[1] = 0;
+    // cam_front[2] = -1;
+    //
+    // glm_vec3_zero(cam_right);
+    //
+    // cam_front[0] = cos(cam_yaw / PI180) * cos(cam_pitch / PI180);
+    // cam_front[1] = sin(cam_pitch / PI180);
+    // cam_front[2] = sin(cam_yaw / PI180) * cos(cam_pitch / PI180);
+    //
+    // glm_vec3_normalize(cam_front);
+    //
+    // glm_vec3_cross(cam_front, cam_world_up, cam_right);
+    // glm_vec3_normalize(cam_right);
+    //
+    // glm_vec3_cross(cam_right, cam_front, cam_up);
+    // glm_vec3_normalize(cam_up);
 
 
-    cam_world_up[0] = 0;
-    cam_world_up[1] = 1;
-    cam_world_up[2] = 0;
-
-    cam_position[0] = 0;
-    cam_position[1] = 0;
-    cam_position[2] = 3;
-
-    cam_front[0] = 0;
-    cam_front[1] = 0;
-    cam_front[2] = -1;
-
-    glm_vec3_zero(cam_right);
-
-    cam_front[0] = cos(cam_yaw / PI180) * cos(cam_pitch / PI180);
-    cam_front[1] = sin(cam_pitch / PI180);
-    cam_front[2] = sin(cam_yaw / PI180) * cos(cam_pitch / PI180);
-
-    glm_vec3_normalize(cam_front);
-
-    glm_vec3_cross(cam_front, cam_world_up, cam_right);
-    glm_vec3_normalize(cam_right);
-
-    glm_vec3_cross(cam_right, cam_front, cam_up);
-    glm_vec3_normalize(cam_up);
-
-
-    // donkey_ctx ctx;
+    donkey_ctx ctx;
     // donkeyobj("object/cow.obj", &ctx);
+    donkey_status status = donkeyobj("object/jenny.obj", &ctx);
+    assert(status == DONKEYOBJ_SUCCESS);
+    // donkeyobj("object/cube-2.obj", &ctx);
+
+    // for (size_t i = 0; i < ctx.vgi; i++) {
+    //     if (i%3==0) printf("\n");
+    //     printf(" v[%ld]: %f ", i, ctx.vertex_vg[i]);
+    // }
+    // printf("\n");
+    //
+    // for (size_t i = 0; i < ctx.ii; i++) {
+    //     if (i%3==0) printf("\n");
+    //     printf(" i[%ld]: %d ", i, ctx.indexes[i]);
+    // }
+    // printf("\n");
 
     // GLuint vertexbuffer;
     // glGenBuffers(1, &vertexbuffer);
     // glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
     // glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
-    //
+
     // GLuint colorbuffer;
     // glGenBuffers(1, &colorbuffer);
     // glBindBuffer(GL_ARRAY_BUFFER, colorbuffer);
     // glBufferData(GL_ARRAY_BUFFER, sizeof(g_color_buffer_data), g_color_buffer_data, GL_STATIC_DRAW);
 
-    float cube[] = {
-        1.000000, 1.000000, -1.000000,
-        1.000000, -1.000000, -1.000000,
-        1.000000, 1.000000, 1.000000,
-        1.000000, -1.000000, 1.000000,
-        -1.000000, 1.000000, -1.000000,
-        -1.000000, -1.000000, -1.000000,
-        -1.000000, 1.000000, 1.000000,
-        -1.000000, -1.000000, 1.000000,
-    };
-
-    uint32_t ind[] = {
-        0, 4, 6,
-        0, 6, 2,
-        3, 2, 6,
-        3, 6, 7,
-        7, 6, 4,
-        7, 4, 5,
-        5, 1, 3,
-        5, 3, 7,
-        1, 0, 2,
-        1, 2, 3,
-        5, 4, 0,
-        5, 0, 1,
-    };
+    log_verbose("ii:  %ld", ctx.ii);
+    log_verbose("vgi: %ld", ctx.vgi);
 
     GLuint VertexArrayID;
 	glGenVertexArrays(1, &VertexArrayID);
@@ -270,15 +318,19 @@ int main(void) {
     glGenBuffers(1, &vbuf);
     glBindBuffer(GL_ARRAY_BUFFER, vbuf);
     // glBufferData(GL_ARRAY_BUFFER, sizeof(pos), pos, GL_STATIC_DRAW);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cube), cube, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, ctx.vgi * sizeof(float), ctx.vertex_vg, GL_STATIC_DRAW);
+    // glBufferData(GL_ARRAY_BUFFER, sizeof(plane), plane, GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 0, 0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 0, 0);
+    // glVertexAttribLPointer(0, 3, GL_DOUBLE, 0, 0);
 
     uint32_t ibuf = 0;
     glGenBuffers(1, &ibuf);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibuf);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ind), ind, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, ctx.ii * sizeof(uint32_t), ctx.indexes, GL_STATIC_DRAW);
+    // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ind), ind, GL_STATIC_DRAW);
 
 
     uint32_t shader_program = glCreateProgram();
@@ -299,55 +351,58 @@ int main(void) {
     while (!glfwWindowShouldClose(window)) {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        mat4 projection;
-        glm_mat4_identity(projection);
-        // glm_ortho(0, width, height, 0, -1, 1, projection);
-        glm_perspective(cam_zoom/PI180, width/height, 0.1, 100, projection);
-        glUniformMatrix4fv(uloc_projection, 1, GL_FALSE, &projection[0][0]);
-
-        vec3 cam_pf;
-        glm_vec3_add(cam_position, cam_front, cam_pf);
-
-        mat4 view;
-        glm_lookat(cam_position, cam_pf, cam_up, view);
-        glUniformMatrix4fv(uloc_view, 1, GL_FALSE, &view[0][0]);
-
-        mat4 model = {
-            { 1.0f, 0.0f, 0.0f, 0.0f },
-            { 0.0f, 1.0f, 0.0f, 0.0f },
-            { 0.0f, 0.0f, 1.0f, 0.0f },
-            { 0.0f, 0.0f, 0.0f, 1.0f },
-        };
-        // glm_mat4_identity(model);
-        glUniformMatrix4fv(uloc_model, 1, GL_FALSE, &model[0][0]);
-
         // mat4 projection;
-        // glm_perspective(45/PI180, width/height, 0.1, 100, projection);
+        // glm_mat4_identity(projection);
+        //
+        // // glm_ortho(0, width, height, 0, -1, 1, projection);
+        // glm_perspective(cam_fov/PI180, width/height, 0.1, 100, projection);
         // glUniformMatrix4fv(uloc_projection, 1, GL_FALSE, &projection[0][0]);
         //
+        // vec3 cam_pf;
+        // glm_vec3_add(cam_position, cam_front, cam_pf);
+        //
         // mat4 view;
-        // glm_lookat(eye, center, up, view);
+        // glm_lookat(cam_position, cam_pf, cam_up, view);
         // glUniformMatrix4fv(uloc_view, 1, GL_FALSE, &view[0][0]);
         //
-        // mat4 tb;
-        // build_rotmatrix(tb, curr_quat);
-        // glUniformMatrix4fv(uloc_tb, 1, GL_FALSE, &tb[0][0]);
+        // mat4 model;
+        // // glm_translate(model, )
+        // glm_mat4_identity(model);
+        // glUniformMatrix4fv(uloc_model, 1, GL_FALSE, &model[0][0]);
+
+        mat4 projection;
+        glm_ortho(0, (float)width / zoom, 0.0f, (float)height / zoom, 0.1f, 100.0f, projection);
+        // glm_ortho(0, (float)width, (float)height, 0, -1.0f, 1.0f, projection);
+        // glm_perspective(45/PI180, width/height, 0.1, 100, projection);
+        glUniformMatrix4fv(uloc_projection, 1, GL_FALSE, &projection[0][0]);
+
+        mat4 view;
+        glm_mat4_identity(view);
+        // vec3 x = {2, +2, -3};
+        // log_verbose("center: "PF", "PF", "PF, center[0], center[1], center[2]);
+        // glm_translate(view, center);
+        glm_lookat(eye, center, up, view);
+        glUniformMatrix4fv(uloc_view, 1, GL_FALSE, &view[0][0]);
+
+        mat4 model;
+        build_rotmatrix(model, curr_quat);
+        glUniformMatrix4fv(uloc_model, 1, GL_FALSE, &model[0][0]);
 
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibuf);
 
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        // glUniform4f(ucloc, (float)rand() / (float)RAND_MAX, 0.6, 1, 1);
         glUniform4f(ucloc, 0.32, 0.6, 1, 1);
 
         // glDrawArrays(GL_TRIANGLES, 0, LEN(cube) / 3);
-        glDrawElements(GL_TRIANGLES, LEN(ind), GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, ctx.ii * sizeof(uint32_t), GL_UNSIGNED_INT, 0);
+        // glDrawElements(GL_TRIANGLES, sizeof(ind), GL_UNSIGNED_INT, 0);
 
-        glLineWidth(4);
+        glLineWidth(1);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         glUniform4f(ucloc, 0, 0, 0, 1);
-
-        // glDrawArrays(GL_TRIANGLES, 0, LEN(cube) / 3);
-        glDrawElements(GL_TRIANGLES, LEN(ind), GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, ctx.ii * sizeof(uint32_t), GL_UNSIGNED_INT, 0);
 
 
 		// Swap buffers
@@ -369,65 +424,64 @@ int main(void) {
 
 static void motion_callback(GLFWwindow* UNUSED(W), double mouse_x, double mouse_y) {
 
-    if (!mouse_left_pressed) {
-        mouse_x_last = mouse_x;
-        mouse_y_last = mouse_y;
-        return;
-    }
-
-    float offset_x = mouse_x - mouse_x_last;
-    float offset_y = mouse_y_last - mouse_y;
-
-    mouse_x_last = mouse_x;
-    mouse_y_last = mouse_y;
-
-    offset_x *= cam_mouse_sensitivity;
-    offset_y *= cam_mouse_sensitivity;
-
-    cam_yaw += offset_x;
-    cam_pitch += offset_y;
-
-    if (cam_pitch > 89.0f)
-        cam_pitch = 89.0f;
-
-    if (cam_pitch < -89.0f)
-        cam_pitch = -89.0f;
-
-    cam_front[0] = cos(cam_yaw / PI180) * cos(cam_pitch / PI180);
-    cam_front[1] = sin(cam_pitch / PI180);
-    cam_front[2] = sin(cam_yaw / PI180) * cos(cam_pitch / PI180);
-
-    glm_vec3_normalize(cam_front);
-
-    glm_vec3_cross(cam_front, cam_world_up, cam_right);
-    glm_vec3_normalize(cam_right);
-
-    glm_vec3_cross(cam_right, cam_front, cam_up);
-    glm_vec3_normalize(cam_up);
-
-    // return;
-    // float rotScale = 1.0f;
-    // float transScale = 2.0f;
-    //
-    // if (mouse_left_pressed) {
-    //     trackball(prev_quat, rotScale * (2.0f * mouse_x_last - width) / (float)width,
-    //               rotScale * (height - 2.0f * mouse_y_last) / (float)height,
-    //               rotScale * (2.0f * (float)mouse_x - width) / (float)width,
-    //               rotScale * (height - 2.0f * (float)mouse_y) / (float)height);
-    //
-    //     add_quats(prev_quat, curr_quat, curr_quat);
-    // } else if (mouse_middle_pressed) {
-    //     eye[0] -= transScale * ((float)mouse_x - mouse_x_last) / (float)width;
-    //     center[0] -= transScale * ((float)mouse_x - mouse_x_last) / (float)width;
-    //     eye[1] += transScale * ((float)mouse_y - mouse_y_last) / (float)height;
-    //     center[1] += transScale * ((float)mouse_y - mouse_y_last) / (float)height;
-    // } else if (mouse_right_pressed) {
-    //     eye[2] += transScale * ((float)mouse_y - mouse_y_last) / (float)height;
-    //     center[2] += transScale * ((float)mouse_y - mouse_y_last) / (float)height;
+    // if (!mouse_left_pressed) {
+    //     mouse_x_last = mouse_x;
+    //     mouse_y_last = mouse_y;
+    //     return;
     // }
+    //
+    // float offset_x = mouse_x - mouse_x_last;
+    // float offset_y = mouse_y_last - mouse_y;
     //
     // mouse_x_last = mouse_x;
     // mouse_y_last = mouse_y;
+    //
+    // offset_x *= cam_mouse_sensitivity;
+    // offset_y *= cam_mouse_sensitivity;
+    //
+    // cam_yaw += offset_x;
+    // cam_pitch += offset_y;
+    //
+    // if (cam_pitch > 89.0f)
+    //     cam_pitch = 89.0f;
+    //
+    // if (cam_pitch < -89.0f)
+    //     cam_pitch = -89.0f;
+    //
+    // cam_front[0] = cos(cam_yaw / PI180) * cos(cam_pitch / PI180);
+    // cam_front[1] = sin(cam_pitch / PI180);
+    // cam_front[2] = sin(cam_yaw / PI180) * cos(cam_pitch / PI180);
+    //
+    // glm_vec3_normalize(cam_front);
+    //
+    // glm_vec3_cross(cam_front, cam_world_up, cam_right);
+    // glm_vec3_normalize(cam_right);
+    //
+    // glm_vec3_cross(cam_right, cam_front, cam_up);
+    // glm_vec3_normalize(cam_up);
+
+    float rotScale = 1.0f;
+    float transScale = 2.0f;
+
+    if (mouse_left_pressed) {
+        trackball(prev_quat, rotScale * (2.0f * mouse_x_last - width) / (float)width,
+                  rotScale * (height - 2.0f * mouse_y_last) / (float)height,
+                  rotScale * (2.0f * (float)mouse_x - width) / (float)width,
+                  rotScale * (height - 2.0f * (float)mouse_y) / (float)height);
+
+        add_quats(prev_quat, curr_quat, curr_quat);
+    } else if (mouse_middle_pressed) {
+        eye[0] -= transScale * ((float)mouse_x - mouse_x_last) / (float)width;
+        center[0] -= transScale * ((float)mouse_x - mouse_x_last) / (float)width;
+        eye[1] += transScale * ((float)mouse_y - mouse_y_last) / (float)height;
+        center[1] += transScale * ((float)mouse_y - mouse_y_last) / (float)height;
+    } else if (mouse_right_pressed) {
+        eye[2] += transScale * ((float)mouse_y - mouse_y_last) / (float)height;
+        center[2] += transScale * ((float)mouse_y - mouse_y_last) / (float)height;
+    }
+
+    mouse_x_last = mouse_x;
+    mouse_y_last = mouse_y;
 }
 
 
@@ -438,7 +492,7 @@ static void click_callback(
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         if (action == GLFW_PRESS) {
             mouse_left_pressed = true;
-            // trackball(prev_quat, 0.0, 0.0, 0.0, 0.0);
+            trackball(prev_quat, 0.0, 0.0, 0.0, 0.0);
         } else if (action == GLFW_RELEASE) {
             mouse_left_pressed = false;
         }
@@ -462,12 +516,240 @@ static void click_callback(
 static void scroll_callback(
     GLFWwindow *UNUSED(W), double UNUSED(X), double yoffset
 ) {
-    cam_zoom -= (float)yoffset;
-
-    if (cam_zoom < 1.0f)
-        cam_zoom = 1.0f;
-
-    if (cam_zoom > 45.0f)
-        cam_zoom = 45.0f;
+    // log_verbose("yoff: %f", yoffset);
+    zoom += (uint32_t)yoffset;
+    // cam_fov -= (float)yoffset;
+    //
+    // if (cam_fov < 1.0f)
+    //     cam_fov = 1.0f;
+    //
+    // if (cam_fov > 45.0f)
+    //     cam_fov = 45.0f;
 }
 
+
+////////////////////////
+
+static void vzero(float *v) {
+  v[0] = 0.0;
+  v[1] = 0.0;
+  v[2] = 0.0;
+}
+
+static void vset(float *v, float x, float y, float z) {
+  v[0] = x;
+  v[1] = y;
+  v[2] = z;
+}
+
+static void vsub(const float *src1, const float *src2, float *dst) {
+  dst[0] = src1[0] - src2[0];
+  dst[1] = src1[1] - src2[1];
+  dst[2] = src1[2] - src2[2];
+}
+
+static void vcopy(const float *v1, float *v2) {
+  register int i;
+  for (i = 0; i < 3; i++)
+    v2[i] = v1[i];
+}
+
+static void vcross(const float *v1, const float *v2, float *cross) {
+  float temp[3];
+
+  temp[0] = (v1[1] * v2[2]) - (v1[2] * v2[1]);
+  temp[1] = (v1[2] * v2[0]) - (v1[0] * v2[2]);
+  temp[2] = (v1[0] * v2[1]) - (v1[1] * v2[0]);
+  vcopy(temp, cross);
+}
+
+static float vlength(const float *v) {
+  return sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+static void vscale(float *v, float div) {
+  v[0] *= div;
+  v[1] *= div;
+  v[2] *= div;
+}
+
+static void vnormal(float *v) { vscale(v, 1.0 / vlength(v)); }
+
+static float vdot(const float *v1, const float *v2) {
+  return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
+}
+
+static void vadd(const float *src1, const float *src2, float *dst) {
+  dst[0] = src1[0] + src2[0];
+  dst[1] = src1[1] + src2[1];
+  dst[2] = src1[2] + src2[2];
+}
+
+/*
+ * Ok, simulate a track-ball.  Project the points onto the virtual
+ * trackball, then figure out the axis of rotation, which is the cross
+ * product of P1 P2 and O P1 (O is the center of the ball, 0,0,0)
+ * Note:  This is a deformed trackball-- is a trackball in the center,
+ * but is deformed into a hyperbolic sheet of rotation away from the
+ * center.  This particular function was chosen after trying out
+ * several variations.
+ *
+ * It is assumed that the arguments to this routine are in the range
+ * (-1.0 ... 1.0)
+ */
+void trackball(float q[4], float p1x, float p1y, float p2x, float p2y) {
+  float a[3]; /* Axis of rotation */
+  float phi;  /* how much to rotate about axis */
+  float p1[3], p2[3], d[3];
+  float t;
+
+  if (p1x == p2x && p1y == p2y) {
+    /* Zero rotation */
+    vzero(q);
+    q[3] = 1.0;
+    return;
+  }
+
+  /*
+   * First, figure out z-coordinates for projection of P1 and P2 to
+   * deformed sphere
+   */
+  vset(p1, p1x, p1y, tb_project_to_sphere(TRACKBALLSIZE, p1x, p1y));
+  vset(p2, p2x, p2y, tb_project_to_sphere(TRACKBALLSIZE, p2x, p2y));
+
+  /*
+   *  Now, we want the cross product of P1 and P2
+   */
+  vcross(p2, p1, a);
+
+  /*
+   *  Figure out how much to rotate around that axis.
+   */
+  vsub(p1, p2, d);
+  t = vlength(d) / (2.0 * TRACKBALLSIZE);
+
+  /*
+   * Avoid problems with out-of-control values...
+   */
+  if (t > 1.0)
+    t = 1.0;
+  if (t < -1.0)
+    t = -1.0;
+  phi = 2.0 * asin(t);
+
+  axis_to_quat(a, phi, q);
+}
+
+/*
+ *  Given an axis and angle, compute quaternion.
+ */
+void axis_to_quat(float a[3], float phi, float q[4]) {
+  vnormal(a);
+  vcopy(a, q);
+  vscale(q, sin(phi / 2.0));
+  q[3] = cos(phi / 2.0);
+}
+
+/*
+ * Project an x,y pair onto a sphere of radius r OR a hyperbolic sheet
+ * if we are away from the center of the sphere.
+ */
+static float tb_project_to_sphere(float r, float x, float y) {
+  float d, t, z;
+
+  d = sqrt(x * x + y * y);
+  if (d < r * 0.70710678118654752440) { /* Inside sphere */
+    z = sqrt(r * r - d * d);
+  } else { /* On hyperbola */
+    t = r / 1.41421356237309504880;
+    z = t * t / d;
+  }
+  return z;
+}
+
+/*
+ * Given two rotations, e1 and e2, expressed as quaternion rotations,
+ * figure out the equivalent single rotation and stuff it into dest.
+ *
+ * This routine also normalizes the result every RENORMCOUNT times it is
+ * called, to keep error from creeping in.
+ *
+ * NOTE: This routine is written so that q1 or q2 may be the same
+ * as dest (or each other).
+ */
+
+#define RENORMCOUNT 97
+
+void add_quats(float q1[4], float q2[4], float dest[4]) {
+  static int count = 0;
+  float t1[4], t2[4], t3[4];
+  float tf[4];
+
+  vcopy(q1, t1);
+  vscale(t1, q2[3]);
+
+  vcopy(q2, t2);
+  vscale(t2, q1[3]);
+
+  vcross(q2, q1, t3);
+  vadd(t1, t2, tf);
+  vadd(t3, tf, tf);
+  tf[3] = q1[3] * q2[3] - vdot(q1, q2);
+
+  dest[0] = tf[0];
+  dest[1] = tf[1];
+  dest[2] = tf[2];
+  dest[3] = tf[3];
+
+  if (++count > RENORMCOUNT) {
+    count = 0;
+    normalize_quat(dest);
+  }
+}
+
+/*
+ * Quaternions always obey:  a^2 + b^2 + c^2 + d^2 = 1.0
+ * If they don't add up to 1.0, dividing by their magnitued will
+ * renormalize them.
+ *
+ * Note: See the following for more information on quaternions:
+ *
+ * - Shoemake, K., Animating rotation with quaternion curves, Computer
+ *   Graphics 19, No 3 (Proc. SIGGRAPH'85), 245-254, 1985.
+ * - Pletinckx, D., Quaternion calculus as a basic tool in computer
+ *   graphics, The Visual Computer 5, 2-13, 1989.
+ */
+static void normalize_quat(float q[4]) {
+  int i;
+  float mag;
+
+  mag = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+  for (i = 0; i < 4; i++)
+    q[i] /= mag;
+}
+
+/*
+ * Build a rotation matrix, given a quaternion rotation.
+ *
+ */
+void build_rotmatrix(float m[4][4], const float q[4]) {
+  m[0][0] = 1.0 - 2.0 * (q[1] * q[1] + q[2] * q[2]);
+  m[0][1] = 2.0 * (q[0] * q[1] - q[2] * q[3]);
+  m[0][2] = 2.0 * (q[2] * q[0] + q[1] * q[3]);
+  m[0][3] = 0.0;
+
+  m[1][0] = 2.0 * (q[0] * q[1] + q[2] * q[3]);
+  m[1][1] = 1.0 - 2.0 * (q[2] * q[2] + q[0] * q[0]);
+  m[1][2] = 2.0 * (q[1] * q[2] - q[0] * q[3]);
+  m[1][3] = 0.0;
+
+  m[2][0] = 2.0 * (q[2] * q[0] - q[1] * q[3]);
+  m[2][1] = 2.0 * (q[1] * q[2] + q[0] * q[3]);
+  m[2][2] = 1.0 - 2.0 * (q[1] * q[1] + q[0] * q[0]);
+  m[2][3] = 0.0;
+
+  m[3][0] = 0.0;
+  m[3][1] = 0.0;
+  m[3][2] = 0.0;
+  m[3][3] = 1.0;
+}
