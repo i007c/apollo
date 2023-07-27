@@ -9,7 +9,7 @@
 #define PF "\033[32m%f\033[0m"
 
 #define DONKEYOBJ_IMPLEMENTATION
-#include "donkeyobj.h"
+#include "donk.h"
 
 static int width = 1080;
 static int height = 720;
@@ -279,9 +279,9 @@ int main(void) {
     // glm_vec3_normalize(cam_up);
 
 
-    donkey_ctx ctx;
+    donk_t donk_result;
     // donkeyobj("object/cow.obj", &ctx);
-    donkey_status status = donkeyobj("object/jenny.obj", &ctx);
+    donkey_status status = donkeyobj("object/model.obj", &donk_result);
     assert(status == DONKEYOBJ_SUCCESS);
     // donkeyobj("object/cube-2.obj", &ctx);
 
@@ -307,8 +307,10 @@ int main(void) {
     // glBindBuffer(GL_ARRAY_BUFFER, colorbuffer);
     // glBufferData(GL_ARRAY_BUFFER, sizeof(g_color_buffer_data), g_color_buffer_data, GL_STATIC_DRAW);
 
-    log_verbose("ii:  %ld", ctx.ii);
-    log_verbose("vgi: %ld", ctx.vgi);
+    log_verbose("elements_count:  %ld", donk_result.elements_count);
+    log_verbose("vertices_count:  %ld", donk_result.vertices_count);
+    log_verbose("textures_count:  %ld", donk_result.textures_count);
+    log_verbose("normals_count:  %ld", donk_result.normals_count);
 
     GLuint VertexArrayID;
 	glGenVertexArrays(1, &VertexArrayID);
@@ -318,7 +320,12 @@ int main(void) {
     glGenBuffers(1, &vbuf);
     glBindBuffer(GL_ARRAY_BUFFER, vbuf);
     // glBufferData(GL_ARRAY_BUFFER, sizeof(pos), pos, GL_STATIC_DRAW);
-    glBufferData(GL_ARRAY_BUFFER, ctx.vgi * sizeof(float), ctx.vertex_vg, GL_STATIC_DRAW);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        donk_result.vertices_count * sizeof(float),
+        donk_result.vertices,
+        GL_STATIC_DRAW
+    );
     // glBufferData(GL_ARRAY_BUFFER, sizeof(plane), plane, GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
@@ -329,7 +336,12 @@ int main(void) {
     uint32_t ibuf = 0;
     glGenBuffers(1, &ibuf);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibuf);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, ctx.ii * sizeof(uint32_t), ctx.indexes, GL_STATIC_DRAW);
+    glBufferData(
+        GL_ELEMENT_ARRAY_BUFFER,
+        donk_result.elements_count * sizeof(uint32_t),
+        donk_result.elements,
+        GL_STATIC_DRAW
+    );
     // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ind), ind, GL_STATIC_DRAW);
 
 
@@ -396,13 +408,23 @@ int main(void) {
         glUniform4f(ucloc, 0.32, 0.6, 1, 1);
 
         // glDrawArrays(GL_TRIANGLES, 0, LEN(cube) / 3);
-        glDrawElements(GL_TRIANGLES, ctx.ii * sizeof(uint32_t), GL_UNSIGNED_INT, 0);
+        glDrawElements(
+            GL_TRIANGLES,
+            donk_result.elements_count * sizeof(uint32_t),
+            GL_UNSIGNED_INT,
+            0
+        );
         // glDrawElements(GL_TRIANGLES, sizeof(ind), GL_UNSIGNED_INT, 0);
 
         glLineWidth(1);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         glUniform4f(ucloc, 0, 0, 0, 1);
-        glDrawElements(GL_TRIANGLES, ctx.ii * sizeof(uint32_t), GL_UNSIGNED_INT, 0);
+        glDrawElements(
+            GL_TRIANGLES,
+            donk_result.elements_count * sizeof(uint32_t),
+            GL_UNSIGNED_INT,
+            0
+        );
 
 
 		// Swap buffers
