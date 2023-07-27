@@ -1,5 +1,8 @@
 
-// header part
+/* vim:fileencoding=utf-8:foldmethod=marker */
+
+
+/* API: {{{ */
 #ifndef __DONKEYOBJ_H__
 #define __DONKEYOBJ_H__
 
@@ -42,46 +45,25 @@ typedef enum kwtype_t {
 // [2] = vertex normals
 typedef uint32_t donkey_face[3];
 
-typedef struct donkey_ctx {
-    // for determining what number are we reading a vg/vt/vn
-    uint8_t face_vidx;
-    // are the in a comment?
-    bool comment;
+typedef struct donk {
+    uint32_t *elements;
+    size_t    elements_count;
 
-    kwtype_t kwtype;
+    float    *vertices;
+    size_t    vertices_count;
 
-    char *path;
-    size_t line_number;
-    size_t lx; // index use to mark start of line in any array
-    size_t bi; // buffer index
-    size_t si; // str index
-    size_t sa; // str args - added with each space
+    float    *textures;
+    size_t    textures_count;
 
-    size_t fi; // faces index
-    size_t vgi; // vertex geometry index
+    float    *normals;
+    size_t    normals_count;
+} donk_t;
 
-    char str[DONKEYOBJ_STRING_SIZE]; // for string temp strings
-    char buf[DONKEYOBJ_BUFFER_SIZE]; // buffer the we read from a file
-    float vertex_vg[DONKEYOBJ_VERTEX_SIZE];  // geometric
-    // float vertex_vt[1024]; // texture
-    // float vertex_vn[1024]; // normals
-    // float vertex_vp[1024]; // parameter space - Free-form curve/surface attr
-
-    donkey_face faces[DONKEYOBJ_VERTEX_SIZE];
-
-    uint32_t indexes[DONKEYOBJ_VERTEX_SIZE];
-    size_t ii;
-    
-    // size_t vtidx = 0;
-    // size_t vnidx = 0;
-    // size_t vpidx = 0;
-} donkey_ctx;
-
-donkey_status donkeyobj(const char *path, donkey_ctx *ctx);
+donkey_status donkeyobj(const char *path, donk_t *ctx);
 
 
 #endif // __DONKEYOBJ_H__
-
+/* }}} */
 
 // impementation part
 #define DONKEYOBJ_IMPLEMENTATION
@@ -101,16 +83,28 @@ donkey_status donkeyobj(const char *path, donkey_ctx *ctx);
 #include <unistd.h>
 #include <fcntl.h>
 
-#define log(...) // printf(__VA_ARGS__)
+#define donk_log(...)\
+(printf(\
+    "\033[94mDONK\033[0m <\033[95mLOG\033[0m>\033[33m:\033[32m%d\033[0m ",\
+    __LINE__\
+),printf(__VA_ARGS__),putchar('\n'))
+
+#define donk_err(fmt, ...)\
+fprintf(\
+    stderr,\
+    "\033[34mDONK\033[0m <\033[31mERR\033[0m>\033[33m:\033[32m%d\033[0m "\
+    fmt" \033[31m%d\033[0m. %s\n",\
+    __LINE__, __VA_ARGS__, errno, strerror(errno)\
+)
 
 #define str_append()\
-ctx->str[ctx->si] = ctx->buf[ctx->bi];\
-ctx->si++;\
-if (ctx->si >= DONKEYOBJ_STRING_SIZE) {\
-    ctx->str[DONKEYOBJ_STRING_SIZE-1] = 0;\
+ctx.str[ctx.si] = ctx.buf[ctx.bi];\
+ctx.si++;\
+if (ctx.si >= DONKEYOBJ_STRING_SIZE) {\
+    ctx.str[DONKEYOBJ_STRING_SIZE-1] = 0;\
     printf(\
         "%s:%ld string '%s' is too long. max size: %d\n",\
-        ctx->path, ctx->line_number, ctx->str, DONKEYOBJ_STRING_SIZE\
+        ctx.path, ctx.line_number, ctx.str, DONKEYOBJ_STRING_SIZE\
     );\
     return DONKEYOBJ_ERROR_BAD_OBJ;\
 }
@@ -158,112 +152,149 @@ static const char *kwtable[DOKWT_MAX] = {
 };
 
 
-donkey_status donkeyobj(const char *path, donkey_ctx *ctx) {
-    log("\n\n");
+struct _donk_ctx_t {
+    // for determining what number are we reading a vg/vt/vn
+    uint8_t face_vidx;
+    // are the in a comment?
+    bool comment;
+
+    kwtype_t kwtype;
+
+    char *path;
+    size_t line_number;
+    size_t lx; // index use to mark start of line in any array
+    size_t bi; // buffer index
+    size_t si; // str index
+    size_t sa; // str args - added with each space
+
+    size_t fi; // faces index
+    size_t vgi; // vertex geometry index
+
+    char str[DONKEYOBJ_STRING_SIZE]; // for string temp strings
+    char buf[DONKEYOBJ_BUFFER_SIZE]; // buffer the we read from a file
+    float vertex_vg[DONKEYOBJ_VERTEX_SIZE];  // geometric
+    // float vertex_vt[1024]; // texture
+    // float vertex_vn[1024]; // normals
+    // float vertex_vp[1024]; // parameter space - Free-form curve/surface attr
+
+    donkey_face faces[DONKEYOBJ_VERTEX_SIZE];
+
+    uint32_t indexes[DONKEYOBJ_VERTEX_SIZE];
+    size_t ii;
+    
+    // size_t vtidx = 0;
+    // size_t vnidx = 0;
+    // size_t vpidx = 0;
+
+};
+
+
+donkey_status donkeyobj(const char *path, donk_t *result) {
     int fd = open(path, O_RDONLY);
-    if (fd < 0) return DONKEYOBJ_ERROR_OPEN;
+    if (fd < 0) {
+        donk_err("opening path: \033[92m'%s'\033[0m", path);
+        return DONKEYOBJ_ERROR_OPEN;
+    }
+
+    struct _donk_ctx_t ctx;
 
     // donkey_ctx ctx;
-    memset(ctx, 0, sizeof(donkey_ctx));
-    ctx->line_number = 1;
-    ctx->path = (char *)path;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.line_number = 1;
+    ctx.path = (char *)path;
+
+    result->elements = ctx.indexes;
 
 
     while (true) {
-        ssize_t read_size = read(fd, ctx->buf, DONKEYOBJ_BUFFER_SIZE);
+        ssize_t read_size = read(fd, ctx.buf, DONKEYOBJ_BUFFER_SIZE);
         if (read_size < 0) return DONKEYOBJ_ERROR_READ;
         if (read_size == 0) break;
 
-        for (ctx->bi = 0; ctx->bi < (size_t)read_size; ctx->bi++) {
-            if (ctx->buf[ctx->bi] == '#') {
-                ctx->comment = true;
-                continue;
-            } else if (ctx->buf[ctx->bi] == '\n') {
-                ctx->comment = false;
+        for (ctx.bi = 0; ctx.bi < (size_t)read_size; ctx.bi++) {
+            assert(ctx.vgi < DONKEYOBJ_VERTEX_SIZE);
+            assert(ctx.ii  < DONKEYOBJ_VERTEX_SIZE);
+            assert(ctx.fi  < DONKEYOBJ_VERTEX_SIZE);
 
-                if (ctx->si && !ctx->kwtype) {
-                    printf("%s:%ld bad object!\n", path, ctx->line_number);
+            if (ctx.buf[ctx.bi] == '#') {
+                ctx.comment = true;
+                continue;
+            } else if (ctx.buf[ctx.bi] == '\n') {
+                ctx.comment = false;
+
+                if (ctx.si && !ctx.kwtype) {
+                    printf("%s:%ld bad object!\n", path, ctx.line_number);
                     return DONKEYOBJ_ERROR_BAD_OBJ;
                 }
 
-                switch (ctx->kwtype) {
+                switch (ctx.kwtype) {
                     case DOKWT_MTLLIB:
                     case DOKWT_G:
-                        if (!ctx->si) break;
-                        ctx->str[ctx->si] = 0;
-                        log("arg[%ld]: '%s'\n", ctx->sa, ctx->str);
+                        if (!ctx.si) break;
+                        ctx.str[ctx.si] = 0;
                         break;
 
                     case DOKWT_USEMTL:
-                        if (!ctx->si) {
+                        if (!ctx.si) {
                             printf(
                                 "%s:%ld this statement need an argument\n",
-                                ctx->path, ctx->line_number
+                                ctx.path, ctx.line_number
                             );
                             return DONKEYOBJ_ERROR_BAD_OBJ;
                         }
-                        ctx->str[ctx->si] = 0;
-                        log("\033[31musemtl\033[0m: '%s'\n", ctx->str);
+                        ctx.str[ctx.si] = 0;
                         break;
 
                     case DOKWT_O:
-                        if (!ctx->si) {
+                        if (!ctx.si) {
                             printf(
                                 "%s:%ld this statement need an argument\n",
-                                ctx->path, ctx->line_number
+                                ctx.path, ctx.line_number
                             );
                             return DONKEYOBJ_ERROR_BAD_OBJ;
                         }
-                        ctx->str[ctx->si] = 0;
-                        log("\033[33mobject name\033[0m: '%s'\n", ctx->str);
+                        ctx.str[ctx.si] = 0;
                         break;
 
                     case DOKWT_V:
-                        ctx->str[ctx->si] = 0;
-                        ctx->vertex_vg[ctx->vgi] = atof(ctx->str);
-                        ctx->vgi++;
-                        assert(ctx->vgi < DONKEYOBJ_VERTEX_SIZE);
-                        log(
-                            "arg[%ld]: '%s' | \033[32m%.20f\033[0m\n",
-                            ctx->sa, ctx->str, ctx->vertex_vg[ctx->vgi]
-                        );
+                        ctx.str[ctx.si] = 0;
+                        ctx.vertex_vg[ctx.vgi] = atof(ctx.str);
+                        ctx.vgi++;
                         break;
 
                     case DOKWT_F:
-                        ctx->lx = 0;
-                        ctx->str[ctx->si] = 0;
-                        ctx->faces[ctx->fi][ctx->face_vidx] = atof(ctx->str);
-                        ctx->fi++;
+                        ctx.lx = 0;
+                        ctx.str[ctx.si] = 0;
+                        ctx.faces[ctx.fi][ctx.face_vidx] = atof(ctx.str);
+                        ctx.fi++;
 
-                        ctx->sa++;
-                        log("found %ld faces on this line:\n", ctx->sa);
-                        size_t tg = ctx->fi - ctx->sa;
+                        ctx.sa++;
+                        size_t tg = ctx.fi - ctx.sa;
 
-                        uint32_t i0 = ctx->faces[tg][0] - 1;
+                        uint32_t i0 = ctx.faces[tg][0] - 1;
                         uint32_t i1;
                         tg++;
-                        uint32_t i2 = ctx->faces[tg][0] - 1;
+                        uint32_t i2 = ctx.faces[tg][0] - 1;
                         tg++;
 
-                        for (; tg < ctx->fi; tg++) {
+                        for (; tg < ctx.fi; tg++) {
                             i1 = i2;
-                            i2 = ctx->faces[tg][0] - 1;
-                            // log(
+                            i2 = ctx.faces[tg][0] - 1;
+                            // dklog(
                             //     "\033[32m%d\033[0m/\033[32m%d\033[0m/"
                             //     "\033[32m%d\033[0m ",
-                            //     ctx->faces[tg][0],
-                            //     ctx->faces[tg][1],
-                            //     ctx->faces[tg][2]
+                            //     ctx.faces[tg][0],
+                            //     ctx.faces[tg][1],
+                            //     ctx.faces[tg][2]
                             // );
 
-                            ctx->indexes[ctx->ii] = i0;
-                            ctx->ii++;
-                            ctx->indexes[ctx->ii] = i1;
-                            ctx->ii++;
-                            ctx->indexes[ctx->ii] = i2;
-                            ctx->ii++;
+                            ctx.indexes[ctx.ii] = i0;
+                            ctx.ii++;
+                            ctx.indexes[ctx.ii] = i1;
+                            ctx.ii++;
+                            ctx.indexes[ctx.ii] = i2;
+                            ctx.ii++;
                         }
-                        log("\n");
 
                         // size_t k;
                         // size_t n = 0;
@@ -291,50 +322,49 @@ donkey_status donkeyobj(const char *path, donkey_ctx *ctx) {
                 }
 
 
-                ctx->si = 0;
-                ctx->sa = 0;
-                ctx->face_vidx = 0;
-                ctx->kwtype = DOKWT_UNKNOWN;
-                ctx->line_number++;
+                ctx.si = 0;
+                ctx.sa = 0;
+                ctx.face_vidx = 0;
+                ctx.kwtype = DOKWT_UNKNOWN;
+                ctx.line_number++;
                 continue;
             }
 
-            if (ctx->comment) {
-                log("\033[33m#");
-                for (; ctx->buf[ctx->bi] != '\n' && ctx->bi < (size_t)read_size; ctx->bi++)
-                    log("%c", ctx->buf[ctx->bi]);
-                log("\033[0m\n");
-                ctx->bi--;
+            if (ctx.comment) {
+                for (;
+                    ctx.buf[ctx.bi] != '\n' && ctx.bi < (size_t)read_size;
+                    ctx.bi++
+                );
+                ctx.bi--;
                 continue;
             }
 
-            switch (ctx->kwtype) {
+            switch (ctx.kwtype) {
                 case DOKWT_UNKNOWN:
                     // we are looking for a keyword
-                    if (!ctx->si && IS_WHITESPACE(ctx->buf[ctx->bi]))
+                    if (!ctx.si && IS_WHITESPACE(ctx.buf[ctx.bi]))
                         continue;
 
                     // end of keyword
-                    if (ctx->si && IS_WHITESPACE(ctx->buf[ctx->bi])) {
-                        ctx->str[ctx->si] = 0;
-                        // kwtype = get_kwtype(ctx->str, ctx->si);
+                    if (ctx.si && IS_WHITESPACE(ctx.buf[ctx.bi])) {
+                        ctx.str[ctx.si] = 0;
+                        // kwtype = get_kwtype(ctx.str, ctx.si);
                         for (size_t j = 0; j < DOKWT_MAX; j++) {
-                            if (!strcmp(ctx->str, kwtable[j])) {
-                                ctx->kwtype = j;
+                            if (!strcmp(ctx.str, kwtable[j])) {
+                                ctx.kwtype = j;
                                 break;
                             }
                         }
 
-                        if (!ctx->kwtype) {
+                        if (!ctx.kwtype) {
                             printf(
                                 "%s:%ld keyword '%s' not found\n",
-                                path, ctx->line_number, ctx->str
+                                path, ctx.line_number, ctx.str
                             );
                             return DONKEYOBJ_ERROR_BAD_OBJ;
                         }
 
-                        log("\nkw[%ld]: '%s'\n", ctx->si, ctx->str);
-                        ctx->si = 0;
+                        ctx.si = 0;
                         continue;
                     }
 
@@ -343,12 +373,11 @@ donkey_status donkeyobj(const char *path, donkey_ctx *ctx) {
 
                 case DOKWT_MTLLIB:
                 case DOKWT_G:
-                    if (IS_WHITESPACE(ctx->buf[ctx->bi])) {
-                        if (!ctx->si) continue;
-                        ctx->str[ctx->si] = 0;
-                        ctx->si = 0;
-                        log("arg[%ld]: '%s'\n", ctx->sa, ctx->str);
-                        ctx->sa++;
+                    if (IS_WHITESPACE(ctx.buf[ctx.bi])) {
+                        if (!ctx.si) continue;
+                        ctx.str[ctx.si] = 0;
+                        ctx.si = 0;
+                        ctx.sa++;
                         continue;
                     }
 
@@ -358,23 +387,19 @@ donkey_status donkeyobj(const char *path, donkey_ctx *ctx) {
                 case DOKWT_O:
                 case DOKWT_USEMTL:
                     // TODO: Check for valid chars
-                    if (!ctx->si && IS_WHITESPACE(ctx->buf[ctx->bi]))
+                    if (!ctx.si && IS_WHITESPACE(ctx.buf[ctx.bi]))
                         continue;
                     str_append();
                     continue;
 
                 case DOKWT_V:
-                    if (IS_WHITESPACE(ctx->buf[ctx->bi])) {
-                        if (!ctx->si) continue;
-                        ctx->str[ctx->si] = 0;
-                        ctx->vertex_vg[ctx->vgi] = atof(ctx->str);
-                        log(
-                            "arg[%ld]: '%s' | \033[32m%.50f\033[0m\n",
-                            ctx->sa, ctx->str, ctx->vertex_vg[ctx->vgi]
-                        );
-                        ctx->vgi++;
-                        ctx->si = 0;
-                        ctx->sa++;
+                    if (IS_WHITESPACE(ctx.buf[ctx.bi])) {
+                        if (!ctx.si) continue;
+                        ctx.str[ctx.si] = 0;
+                        ctx.vertex_vg[ctx.vgi] = atof(ctx.str);
+                        ctx.vgi++;
+                        ctx.si = 0;
+                        ctx.sa++;
                         continue;
                     }
 
@@ -382,31 +407,31 @@ donkey_status donkeyobj(const char *path, donkey_ctx *ctx) {
                     continue;
 
                 case DOKWT_F:
-                    if (!ctx->lx) ctx->lx = ctx->fi;
+                    if (!ctx.lx) ctx.lx = ctx.fi;
 
-                    if (ctx->buf[ctx->bi] == '/') {
-                        if (ctx->si) {
-                            ctx->str[ctx->si] = 0;
-                            ctx->faces[ctx->fi][ctx->face_vidx] = atof(ctx->str);
+                    if (ctx.buf[ctx.bi] == '/') {
+                        if (ctx.si) {
+                            ctx.str[ctx.si] = 0;
+                            ctx.faces[ctx.fi][ctx.face_vidx] = atof(ctx.str);
                         } else {
-                            ctx->faces[ctx->fi][ctx->face_vidx] = 0;
+                            ctx.faces[ctx.fi][ctx.face_vidx] = 0;
                         }
 
-                        ctx->si = 0;
-                        ctx->face_vidx++;
+                        ctx.si = 0;
+                        ctx.face_vidx++;
                         continue;
                     }
 
-                    if (IS_WHITESPACE(ctx->buf[ctx->bi])) {
-                        if (!ctx->si) continue;
+                    if (IS_WHITESPACE(ctx.buf[ctx.bi])) {
+                        if (!ctx.si) continue;
 
-                        ctx->str[ctx->si] = 0;
-                        ctx->faces[ctx->fi][ctx->face_vidx] = atof(ctx->str);
+                        ctx.str[ctx.si] = 0;
+                        ctx.faces[ctx.fi][ctx.face_vidx] = atof(ctx.str);
 
-                        ctx->face_vidx = 0;
-                        ctx->fi++;
-                        ctx->si = 0;
-                        ctx->sa++;
+                        ctx.face_vidx = 0;
+                        ctx.fi++;
+                        ctx.si = 0;
+                        ctx.sa++;
                         continue;
                     }
 
@@ -426,6 +451,8 @@ donkey_status donkeyobj(const char *path, donkey_ctx *ctx) {
     return DONKEYOBJ_SUCCESS;
 }
 
+#undef donk_err
+#undef donk_log
 
 
 #endif // DONKEYOBJ_IMPLEMENTATION
