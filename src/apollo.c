@@ -281,8 +281,8 @@ int main(void) {
 
     donk_t donk_result;
     // donkeyobj("object/cow.obj", &ctx);
-    donkey_status status = donkeyobj("object/model.obj", &donk_result);
-    assert(status == DONKEYOBJ_SUCCESS);
+    donk_status_t status = donk("object/t1.obj", &donk_result);
+    assert(status == DONK_SUCCESS);
     // donkeyobj("object/cube-2.obj", &ctx);
 
     // for (size_t i = 0; i < ctx.vgi; i++) {
