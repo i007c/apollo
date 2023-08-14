@@ -3,8 +3,8 @@
 
 
 /* API: {{{ */
-#ifndef __DONKEYOBJ_H__
-#define __DONKEYOBJ_H__
+#ifndef __DONKO_H__
+#define __DONKO_H__
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -253,11 +253,22 @@ donk_status_t donk(const char *path, donk_t *result) {
 
                 if (ctx.si && !ctx.kwtype) {
                     ctx.str[ctx.si] = 0;
-                    donk_err(
-                        ""STRFMT":"LDFMT" keyword not found: "STRFMT,
-                        path, ctx.line_number, ctx.str
-                    );
-                    return DONK_INVALID_OBJ;
+                    ctx.si = 0;
+                    // kwtype = get_kwtype(ctx.str, ctx.si);
+                    for (size_t j = 0; j < DOKWT_MAX; j++) {
+                        if (!strcmp(ctx.str, kwtable[j])) {
+                            ctx.kwtype = j;
+                            break;
+                        }
+                    }
+
+                    if (!ctx.kwtype) {
+                        donk_err(
+                            ""STRFMT":"LDFMT" keyword not found: "STRFMT,
+                            path, ctx.line_number, ctx.str
+                        );
+                        return DONK_INVALID_OBJ;
+                    }
                 }
 
                 switch (ctx.kwtype) {
