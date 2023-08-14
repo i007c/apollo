@@ -3,8 +3,8 @@ CC = gcc
 CFLAGS  = -std=c11 -Os -g -pedantic -Wall -Wextra -Wpedantic -Werror
 CFLAGS += -Isrc/include/  -Ilib/
 
-LDFLAGS = -lGL -lGLU -lGLEW -lglfw -lm
-# -ldl -lXrandr -lXi -lX11 -lpthread
+LDFLAGS = -lGL -lGLU -lm -lglfw
+# -ldl -lXrandr -lXi -lX11 -lpthread -lglfw -lGLEW
 # -lglut 
 
 SOURCES = $(shell find src -type f -name "*.c" -not -path "src/.ccls-cache/*")

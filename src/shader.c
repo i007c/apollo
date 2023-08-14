@@ -1,4 +1,6 @@
 
+
+#include "gl.h"
 #include "apollo.h"
 
 #define LS SECTOR_MAIN_SHADER

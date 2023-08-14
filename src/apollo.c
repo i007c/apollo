@@ -1,5 +1,8 @@
 
 
+#define GLAD_GL_IMPLEMENTATION
+#include "gl.h"
+
 #include "apollo.h"
 
 #include "cglm/cglm.h"
@@ -221,10 +224,13 @@ int main(void) {
     glfwSetScrollCallback(window, scroll_callback);
 
 
-    if (glewInit() != GLEW_OK) {
-        log_error("glew init faild");
-        return EXIT_FAILURE;
-    }
+    int version = gladLoadGL(glfwGetProcAddress);
+    log_info("version: %d\n", version);
+
+    // if (glewInit() != GLEW_OK) {
+    //     log_error("glew init faild");
+    //     return EXIT_FAILURE;
+    // }
 
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(debug_message, NULL);
@@ -281,7 +287,7 @@ int main(void) {
 
     donk_t donk_result;
     // donkeyobj("object/cow.obj", &ctx);
-    donk_status_t status = donk("object/t1.obj", &donk_result);
+    donk_status_t status = donk("object/cow.obj", &donk_result);
     assert(status == DONK_SUCCESS);
     // donkeyobj("object/cube-2.obj", &ctx);
 
