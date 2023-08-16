@@ -2,8 +2,6 @@
 #ifndef __APOLLO_LOGGER_H__
 #define __APOLLO_LOGGER_H__
 
-#include "common.h"
-
 #define LOG_TRACE_LVL1(LINE) #LINE
 #define LOG_TRACE_LVL2(LINE) LOG_TRACE_LVL1(LINE)
 #define LOG_THROW_LOCATION "[" __FILE__ ":" LOG_TRACE_LVL2(__LINE__) "] "
@@ -12,6 +10,7 @@ typedef enum {
     SECTOR_MAIN                   = 000,
     SECTOR_MAIN_APOLLO            = 001,
     SECTOR_MAIN_SHADER            = 002,
+    SECTOR_MAIN_WINDOW            = 003,
     // SECTOR_USER                   = 100,
     // SECTOR_USER_AGENT             = 101,
     // SECTOR_USER_PHONE             = 102,

@@ -1,7 +1,17 @@
 
-#include "common.h"
 #include "logger.h"
 
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <time.h>
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/time.h>
 
 #define MESSAGE_MAX 8196
 #define INFO_MAX 512
@@ -36,6 +46,7 @@ static SectorFile SECTORS[] = {
 static char* SUB_SECTOR_NAMES[] = {
     [SECTOR_MAIN_APOLLO]         = "apollo",
     [SECTOR_MAIN_SHADER]         = "shader",
+    [SECTOR_MAIN_WINDOW]         = "window",
 };
 
 static void make_dirs(void) {
@@ -182,13 +193,11 @@ void logger(const Sector index, const Flag flag, const char *format, ...) {
 }
 
 
-status_t logger_setup(void) {
+void logger_setup(void) {
     DateTime datetime;
     get_datetime(&datetime);
     make_dirs();
     update_sectors(&datetime);
-    
-    return STS_SUCCESS;
 }
 
 void logger_clean(void) {
