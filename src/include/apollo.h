@@ -41,7 +41,9 @@ typedef struct State {
     float mouse_x_last;
     float mouse_y_last;
     
-    uint32_t zoom;
+    float zoom;
+
+    bool wireframe;
 } State;
 
 void shader_load(uint32_t program, const char *path, uint32_t type);

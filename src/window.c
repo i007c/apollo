@@ -84,6 +84,10 @@ void key_callback(GLFWwindow *win, int key, int UNUSED(scancode), int action, in
                 state.center[0] -= state.move_speed / state.width;
                 break;
 
+            case GLFW_KEY_T:
+                state.wireframe = !state.wireframe;
+                break;
+
             // case GLFW_KEY_L:
             //     cam_logger();
             //     break;
@@ -172,7 +176,7 @@ static void scroll_callback(
     GLFWwindow *UNUSED(W), double UNUSED(X), double yoffset
 ) {
     // log_verbose("yoff: %f", yoffset);
-    state.zoom += (uint32_t)yoffset;
+    state.zoom -= (float)yoffset;
     // cam_fov -= (float)yoffset;
     //
     // if (cam_fov < 1.0f)

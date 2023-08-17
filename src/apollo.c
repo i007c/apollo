@@ -78,7 +78,9 @@ void state_init(void) {
     state.width = 1080;
     state.height = 720;
     state.move_speed = 256;
-    state.zoom = 100;
+    state.zoom = 85.0f;
+
+    state.wireframe = true;
 
     trackball(state.curr_quat, 0, 0, 0, 0);
 
@@ -252,15 +254,17 @@ int main(void) {
         );
         // glDrawElements(GL_TRIANGLES, sizeof(ind), GL_UNSIGNED_INT, 0);
 
-        glLineWidth(1);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glUniform4f(ucloc, 0, 0, 0, 1);
-        glDrawElements(
-            GL_TRIANGLES,
-            donk_result.elements_count * sizeof(uint32_t),
-            GL_UNSIGNED_INT,
-            0
-        );
+        if (state.wireframe) {
+            glLineWidth(1);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glUniform4f(ucloc, 0, 0, 0, 1);
+            glDrawElements(
+                GL_TRIANGLES,
+                donk_result.elements_count * sizeof(uint32_t),
+                GL_UNSIGNED_INT,
+                0
+            );
+        }
 
 
 		// Swap buffers
