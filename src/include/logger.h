@@ -40,6 +40,8 @@ typedef enum {
 #define log_error(...)    logger(LS, LF_EROR, __VA_ARGS__)
 #define log_trace(...)    logger(LS, LF_EROR, LOG_THROW_LOCATION __VA_ARGS__)
 #define log_break()       logger(LS, LF_BRAK, "")
+#define log_errno(fmt, ...)\
+logger(LS, LF_EROR, fmt" %d. %s", __VA_ARGS__, strerror(errno))
 
 void logger(const Sector index, const Flag flag, const char *format, ...);
 

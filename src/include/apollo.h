@@ -19,6 +19,7 @@
 typedef enum status_t {
     STS_SUCCESS = 0,
     STS_WIN_ERR = 1,
+    STS_GLS_ERR = 2,
 } status_t;
 
 typedef struct State {
@@ -30,6 +31,7 @@ typedef struct State {
     vec3 up;
 
     float move_speed;
+    float zoom;
 
     vec4 curr_quat;
     vec4 prev_quat;
@@ -37,17 +39,18 @@ typedef struct State {
     bool mouse_left_pressed;
     bool mouse_middle_pressed;
     bool mouse_right_pressed;
+    bool wireframe;
     
     float mouse_x_last;
     float mouse_y_last;
     
-    float zoom;
-
-    bool wireframe;
+    int inotify_fd;
+    uint32_t gl_program;
 } State;
 
-void shader_load(uint32_t program, const char *path, uint32_t type);
-void shader_link(uint32_t program);
+status_t shader_load(char *path, uint32_t type);
+status_t shader_link(void);
+status_t shader_reload(int watch_fd);
 
 
 #define TRACKBALLSIZE (0.6)

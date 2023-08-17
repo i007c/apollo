@@ -20,41 +20,9 @@
 #include "donk.h"
 
 
+#include <sys/inotify.h>
 
 status_t window_init(GLFWwindow **win);
-
-// vec3 cam_position;
-// vec3 cam_front;
-// vec3 cam_up;
-// vec3 cam_right;
-// vec3 cam_world_up;
-// // euler Angles
-// float cam_yaw = -90;
-// float cam_pitch = -10;
-// // camera options
-// float cam_mouse_sensitivity = 0.0001;
-// float cam_key_sensitivity = 1.2;
-// float cam_fov = 45;
-// vec3 cam_temp;
-
-
-// void cam_logger(void) {
-//     log_verbose(
-//         "\ncam {\n  temp: [ "PF", "PF", "PF" ]\n  yaw: "PF"\n  pitch: "PF"\n"
-//         "  position: [ "PF", "PF", "PF" ]\n  front: [ "PF", "PF", "PF" ]\n"
-//         "  right: [ "PF", "PF", "PF" ]\n  up: [ "PF", "PF", "PF" ]\n"
-//         "  world_up: [ "PF", "PF", "PF" ]\n  zoom: "PF"\n}\n",
-//         cam_temp[0], cam_temp[1], cam_temp[2],
-//         cam_yaw, cam_pitch,
-//         cam_position[0], cam_position[1], cam_position[2],
-//         cam_front[0], cam_front[1], cam_front[2],
-//         cam_right[0], cam_right[1], cam_right[2],
-//         cam_up[0], cam_up[1], cam_up[2],
-//         cam_world_up[0], cam_world_up[1], cam_world_up[2],
-//         cam_fov
-//     );
-// }
-//
 
 
 void debug_message(
@@ -70,6 +38,15 @@ void debug_message(
 
 
 State state;
+
+void cleanup(void) {
+    close(state.inotify_fd);
+    glDeleteProgram(state.gl_program);
+    glfwTerminate();
+    exit(0);
+}
+
+
 void state_init(void) {
     log_info("state init");
 
@@ -86,6 +63,14 @@ void state_init(void) {
 
     state.eye[2] = 10.0f;
     state.up[1] = 1.0f;
+
+    state.inotify_fd = inotify_init1(IN_NONBLOCK);
+    if (state.inotify_fd < 0) {
+        log_errno("can't open inotify fd.", errno);
+        cleanup();
+    }
+
+
 }
 
 int main(void) {
@@ -96,10 +81,8 @@ int main(void) {
     state_init();
 
     GLFWwindow *window = NULL;
-    if (window_init(&window)) {
-        return EXIT_FAILURE;
-    }
-    assert(window != NULL);
+    if (window_init(&window))
+        cleanup();
 
     int version = gladLoadGL(glfwGetProcAddress);
     log_info("version: %d\n", version);
@@ -112,6 +95,12 @@ int main(void) {
     donk_t donk_result;
     donk_status_t status = donk("object/cow.obj", &donk_result);
     assert(status == DONK_SUCCESS);
+
+    state.gl_program = glCreateProgram();
+    if (!state.gl_program) {
+        log_error("can't create gl program.", errno);
+        cleanup();
+    }
 
     // for (size_t i = 0; i < ctx.vgi; i++) {
     //     if (i%3==0) printf("\n");
@@ -173,23 +162,44 @@ int main(void) {
     // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ind), ind, GL_STATIC_DRAW);
 
 
-    uint32_t shader_program = glCreateProgram();
-    // shader_load(shader_program, "shader/vertex.glsl", GL_VERTEX_SHADER);
-    shader_load(shader_program, "shader/cam/vx.glsl", GL_VERTEX_SHADER);
-    shader_load(shader_program, "shader/fragment.glsl", GL_FRAGMENT_SHADER);
-    shader_link(shader_program);
-    glUseProgram(shader_program);
+    // shader_load(state.gl_program, "shader/vertex.glsl", GL_VERTEX_SHADER);
+    shader_load("shader/cam/vx.glsl", GL_VERTEX_SHADER);
+    shader_load("shader/fragment.glsl", GL_FRAGMENT_SHADER);
 
-    int ucloc = glGetUniformLocation(shader_program, "u_color");
+    shader_link();
 
-    int uloc_view = glGetUniformLocation(shader_program, "view");
-    int uloc_projection = glGetUniformLocation(shader_program, "projection");
-    int uloc_model = glGetUniformLocation(shader_program, "model");
+    glUseProgram(state.gl_program);
+
+    int ucloc = glGetUniformLocation(state.gl_program, "u_color");
+    int uloc_view = glGetUniformLocation(state.gl_program, "view");
+    int uloc_projection = glGetUniformLocation(state.gl_program, "projection");
+    int uloc_model = glGetUniformLocation(state.gl_program, "model");
 
     glClearColor(0.016f, 0.016f, 0.016f, 1.0f);
 
+    uint8_t n = 0;
+    struct inotify_event inbuf;
+
     while (!glfwWindowShouldClose(window)) {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        n++;
+
+        if (n > 20) {
+            int rs = read(
+                state.inotify_fd, &inbuf, sizeof(struct inotify_event)
+            );
+
+            if (rs > 0) {
+                if (inbuf.mask & (IN_MOVE_SELF | IN_MODIFY)) {
+                    // FIXME: for reloaing you have to readload
+                    //        the whole gl program
+                    shader_reload(inbuf.wd);
+                    glUseProgram(state.gl_program);
+                }
+            }
+            // log_info("read size: %d - inw1: %d", rs, inw1);
+            n = 0;
+        }
 
         // mat4 projection;
         // glm_mat4_identity(projection);
@@ -266,7 +276,6 @@ int main(void) {
             );
         }
 
-
 		// Swap buffers
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -275,9 +284,6 @@ int main(void) {
     glDeleteVertexArrays(1, &VertexArrayID);
     glDeleteBuffers(1, &vbuf);
     glDeleteBuffers(1, &ibuf);
-    glDeleteProgram(shader_program);
-
-    glfwTerminate();
 
     return EXIT_SUCCESS;
 }
