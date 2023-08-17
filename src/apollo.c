@@ -14,7 +14,6 @@
 #include <GLFW/glfw3.h>
 
 #define LS SECTOR_MAIN_APOLLO
-#define PI180 0.017453292519943295
 #define PF "\033[32m%f\033[0m"
 
 #define DONKEYOBJ_IMPLEMENTATION
@@ -210,13 +209,20 @@ int main(void) {
         // glUniformMatrix4fv(uloc_model, 1, GL_FALSE, &model[0][0]);
 
         mat4 projection;
-        glm_ortho(
-            0, (float)state.width / state.zoom,
-            0.0f, (float)state.height / state.zoom,
-            0.1f, 100.0f, projection
-        );
+        // mat4s projection = glms_perspective(
+        //     75.0f * (GLM_PI / 180.0f),
+        // );
+        // glm_ortho(
+        //     0, (float)state.width / state.zoom,
+        //     0.0f, (float)state.height / state.zoom,
+        //     0.1f, 100.0f, projection
+        // );
         // glm_ortho(0, (float)width, (float)height, 0, -1.0f, 1.0f, projection);
-        // glm_perspective(45/PI180, width/height, 0.1, 100, projection);
+        glm_perspective(
+            state.zoom * (GLM_PI / 180.0f),
+            state.width / state.height,
+            0.01f, 1000.0f, projection
+        );
         glUniformMatrix4fv(uloc_projection, 1, GL_FALSE, &projection[0][0]);
 
         mat4 view;
