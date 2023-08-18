@@ -69,8 +69,6 @@ void state_init(void) {
         log_errno("can't open inotify fd.", errno);
         cleanup();
     }
-
-
 }
 
 int main(void) {
@@ -96,11 +94,10 @@ int main(void) {
     donk_status_t status = donk("object/cow.obj", &donk_result);
     assert(status == DONK_SUCCESS);
 
-    state.gl_program = glCreateProgram();
-    if (!state.gl_program) {
-        log_error("can't create gl program.", errno);
-        cleanup();
-    }
+    // if (!state.gl_program) {
+    //     log_error("can't create gl program.", errno);
+    //     cleanup();
+    // }
 
     // for (size_t i = 0; i < ctx.vgi; i++) {
     //     if (i%3==0) printf("\n");
@@ -162,18 +159,18 @@ int main(void) {
     // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ind), ind, GL_STATIC_DRAW);
 
 
+
+    state.gl_program = glCreateProgram();
     // shader_load(state.gl_program, "shader/vertex.glsl", GL_VERTEX_SHADER);
     shader_load("shader/cam/vx.glsl", GL_VERTEX_SHADER);
     shader_load("shader/fragment.glsl", GL_FRAGMENT_SHADER);
-
     shader_link();
-
     glUseProgram(state.gl_program);
-
     int ucloc = glGetUniformLocation(state.gl_program, "u_color");
     int uloc_view = glGetUniformLocation(state.gl_program, "view");
     int uloc_projection = glGetUniformLocation(state.gl_program, "projection");
     int uloc_model = glGetUniformLocation(state.gl_program, "model");
+    int uloc_wireframe = glGetUniformLocation(state.gl_program, "wireframe");
 
     glClearColor(0.016f, 0.016f, 0.016f, 1.0f);
 
@@ -190,14 +187,19 @@ int main(void) {
             );
 
             if (rs > 0) {
-                if (inbuf.mask & (IN_MOVE_SELF | IN_MODIFY)) {
-                    // FIXME: for reloaing you have to readload
-                    //        the whole gl program
-                    shader_reload(inbuf.wd);
-                    glUseProgram(state.gl_program);
-                }
+                log_info("reloading the shaders. mask: %x", inbuf.mask);
+                glDeleteProgram(state.gl_program);
+                state.gl_program = glCreateProgram();
+                shader_load("shader/cam/vx.glsl", GL_VERTEX_SHADER);
+                shader_load("shader/fragment.glsl", GL_FRAGMENT_SHADER);
+                shader_link();
+                glUseProgram(state.gl_program);
+                ucloc = glGetUniformLocation(state.gl_program, "u_color");
+                uloc_wireframe = glGetUniformLocation(state.gl_program, "wireframe");
+                uloc_view = glGetUniformLocation(state.gl_program, "view");
+                uloc_projection = glGetUniformLocation(state.gl_program, "projection");
+                uloc_model = glGetUniformLocation(state.gl_program, "model");
             }
-            // log_info("read size: %d - inw1: %d", rs, inw1);
             n = 0;
         }
 
@@ -245,6 +247,8 @@ int main(void) {
         glm_lookat(state.eye, state.center, state.up, view);
         glUniformMatrix4fv(uloc_view, 1, GL_FALSE, &view[0][0]);
 
+        glUniform1i(uloc_wireframe, 0);
+
         mat4 model;
         build_rotmatrix(model, state.curr_quat);
         glUniformMatrix4fv(uloc_model, 1, GL_FALSE, &model[0][0]);
@@ -265,9 +269,10 @@ int main(void) {
         // glDrawElements(GL_TRIANGLES, sizeof(ind), GL_UNSIGNED_INT, 0);
 
         if (state.wireframe) {
-            glLineWidth(1);
+            glLineWidth(2);
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            glUniform4f(ucloc, 0, 0, 0, 1);
+            glUniform1i(uloc_wireframe, 1);
+            // glUniform4f(ucloc, 0, 0, 0, 1);
             glDrawElements(
                 GL_TRIANGLES,
                 donk_result.elements_count * sizeof(uint32_t),

@@ -95,39 +95,39 @@ status_t shader_read(char *path, char **result) {
 
 status_t shader_load(char *path, GLenum type) {
     status_t status;
-    ShaderState *curent_state = NULL;
+    // ShaderState *curent_state = NULL;
     log_verbose("loading '%s'", path);
 
-    curent_state = malloc(sizeof(ShaderState));
-    if (curent_state == NULL) {
-        log_errno("malloc faild to allocate a shader state", errno);
-        return STS_GLS_ERR;
-    }
-
-    curent_state->next = NULL;
-    curent_state->path = path;
-    curent_state->type = type;
-
-    if (shader_state == NULL) {
-        shader_state = curent_state;
-        shader_state->prev = curent_state;
-    } else {
-        // shader_state prev is also the last state
-        // end element in the chain
-        shader_state->prev->next = curent_state;
-        curent_state->prev = shader_state->prev;
-        shader_state->prev = curent_state;
-    }
-
-    log_info("add watcher for '%s'", path);
-    curent_state->watch_fd = inotify_add_watch(
+    // curent_state = malloc(sizeof(ShaderState));
+    // if (curent_state == NULL) {
+    //     log_errno("malloc faild to allocate a shader state", errno);
+    //     return STS_GLS_ERR;
+    // }
+    //
+    // curent_state->next = NULL;
+    // curent_state->path = path;
+    // curent_state->type = type;
+    //
+    // if (shader_state == NULL) {
+    //     shader_state = curent_state;
+    //     shader_state->prev = curent_state;
+    // } else {
+    //     // shader_state prev is also the last state
+    //     // end element in the chain
+    //     shader_state->prev->next = curent_state;
+    //     curent_state->prev = shader_state->prev;
+    //     shader_state->prev = curent_state;
+    // }
+    //
+    // log_info("add watcher for '%s'", path);
+    inotify_add_watch(
         state.inotify_fd, path,
         IN_MODIFY | IN_MOVE_SELF
     );
-    if (curent_state->watch_fd < 0) {
-        log_errno("can't watch shader: %s.", path, errno);
-        return STS_GLS_ERR;
-    }
+    // if (curent_state->watch_fd < 0) {
+    //     log_errno("can't watch shader: %s.", path, errno);
+    //     return STS_GLS_ERR;
+    // }
 
     char *buffer = NULL;
     if ((status = shader_read(path, &buffer)))
@@ -135,73 +135,73 @@ status_t shader_load(char *path, GLenum type) {
 
 
     log_info("creating and compiling the shader: '%s'", path);
-    curent_state->shader_id = glCreateShader(type);
-    glShaderSource(curent_state->shader_id, 1, (const char **)&buffer, NULL);
-    glCompileShader(curent_state->shader_id);
+    uint32_t shader_id = glCreateShader(type);
+    glShaderSource(shader_id, 1, (const char **)&buffer, NULL);
+    glCompileShader(shader_id);
 
-    glGetShaderiv(curent_state->shader_id, GL_COMPILE_STATUS, &shader_status);
+    glGetShaderiv(shader_id, GL_COMPILE_STATUS, &shader_status);
     if (!shader_status) {
-        glGetShaderInfoLog(curent_state->shader_id, INFO_SIZE, NULL, info);
+        glGetShaderInfoLog(shader_id, INFO_SIZE, NULL, info);
         log_error("shader '%s' compilation failed - %s", path, info);
         free(buffer);
         return STS_GLS_ERR;
     }
 
-    glAttachShader(state.gl_program, curent_state->shader_id);
+    glAttachShader(state.gl_program, shader_id);
 
-    glDeleteShader(curent_state->shader_id);
+    glDeleteShader(shader_id);
     free(buffer);
 
     return STS_SUCCESS;
 }
 
-status_t shader_reload(int watch_fd) {
-    log_info("reloading shader: %d", watch_fd);
-
-    status_t status;
-    char *buffer = NULL;
-    ShaderState *curent_state = shader_state;
-
-    while (curent_state != NULL) {
-        if (curent_state->watch_fd == watch_fd) {
-            if ((status = shader_read(curent_state->path, &buffer)))
-                return status;
-
-            glDetachShader(state.gl_program, curent_state->shader_id);
-
-            curent_state->shader_id = glCreateShader(curent_state->type);
-            glShaderSource(
-                curent_state->shader_id, 1, (const char **)&buffer, NULL
-            );
-            glCompileShader(curent_state->shader_id);
-            glGetShaderiv(
-                curent_state->shader_id, GL_COMPILE_STATUS, &shader_status
-            );
-            free(buffer);
-
-            if (!shader_status) {
-                glGetShaderInfoLog(
-                    curent_state->shader_id, INFO_SIZE, NULL, info
-                );
-                log_error(
-                    "shader '%s' compilation failed - %s",
-                    curent_state->path, info
-                );
-                return STS_GLS_ERR;
-            }
-
-            glAttachShader(state.gl_program, curent_state->shader_id);
-            glDeleteShader(curent_state->shader_id);
-
-            return STS_SUCCESS;
-        }
-
-        curent_state = shader_state->next;
-    }
-
-    log_warn("shader with watch fd: %d was not found.", watch_fd);
-    return STS_GLS_ERR;
-}
+// status_t shader_reload(int watch_fd) {
+//     log_info("reloading shader: %d", watch_fd);
+//
+//     status_t status;
+//     char *buffer = NULL;
+//     ShaderState *curent_state = shader_state;
+//
+//     while (curent_state != NULL) {
+//         if (curent_state->watch_fd == watch_fd) {
+//             if ((status = shader_read(curent_state->path, &buffer)))
+//                 return status;
+//
+//             glDetachShader(state.gl_program, curent_state->shader_id);
+//
+//             curent_state->shader_id = glCreateShader(curent_state->type);
+//             glShaderSource(
+//                 curent_state->shader_id, 1, (const char **)&buffer, NULL
+//             );
+//             glCompileShader(curent_state->shader_id);
+//             glGetShaderiv(
+//                 curent_state->shader_id, GL_COMPILE_STATUS, &shader_status
+//             );
+//             free(buffer);
+//
+//             if (!shader_status) {
+//                 glGetShaderInfoLog(
+//                     curent_state->shader_id, INFO_SIZE, NULL, info
+//                 );
+//                 log_error(
+//                     "shader '%s' compilation failed - %s",
+//                     curent_state->path, info
+//                 );
+//                 return STS_GLS_ERR;
+//             }
+//
+//             glAttachShader(state.gl_program, curent_state->shader_id);
+//             glDeleteShader(curent_state->shader_id);
+//
+//             return STS_SUCCESS;
+//         }
+//
+//         curent_state = shader_state->next;
+//     }
+//
+//     log_warn("shader with watch fd: %d was not found.", watch_fd);
+//     return STS_GLS_ERR;
+// }
 
 
 status_t shader_link(void) {
