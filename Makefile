@@ -13,23 +13,23 @@ OBJECTS = $(addprefix build/, $(SOURCES:.c=.o))
 EXEC = bin/apollo
 
 
-${EXEC}: clear ${OBJECTS}
+$(EXEC): clear $(OBJECTS)
 	mkdir -p $(@D)
-	${CC} -o $@ ${OBJECTS} ${LDFLAGS}
+	$(CC) -o $@ $(OBJECTS) $(LDFLAGS)
 
 
-build/%.o: %.c ${HEADERS}
-	@mkdir -p ${@D}
-	@${CC} -c ${CFLAGS} $< -o $@
+build/%.o: %.c $(HEADERS)
+	@mkdir -p $(@D)
+	@$(CC) -c $(CFLAGS) $< -o $@
 	@echo $<
 
 
-run: clear ${EXEC}
-	${EXEC}
+run: clear $(EXEC)
+	$(EXEC)
 
 
 clean:
-	rm -rf ${EXEC} ${OBJECTS}
+	rm -rf $(EXEC) $(OBJECTS)
 
 
 clear:
@@ -37,5 +37,5 @@ clear:
 	clear
 
 .PHONY: clear run clean
-.SILENT: clear run clean ${EXEC}
+.SILENT: clear run clean $(EXEC)
 

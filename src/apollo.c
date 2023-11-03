@@ -61,7 +61,7 @@ void state_init(void) {
 
     trackball(state.curr_quat, 0, 0, 0, 0);
 
-    state.eye[2] = 10.0f;
+    state.eye[2] = 7.0f;
     state.up[1] = 1.0f;
 
     state.inotify_fd = inotify_init1(IN_NONBLOCK);
@@ -90,9 +90,9 @@ int main(void) {
 
     glEnable(GL_DEPTH_TEST);
 
-    donk_t donk_result;
-    donk_status_t status = donk("object/cow.obj", &donk_result);
-    assert(status == DONK_SUCCESS);
+    // donk_t donk_result;
+    // donk_status_t status = donk("object/cow.obj", &donk_result);
+    // assert(status == DONK_SUCCESS);
 
     // if (!state.gl_program) {
     //     log_error("can't create gl program.", errno);
@@ -121,14 +121,31 @@ int main(void) {
     // glBindBuffer(GL_ARRAY_BUFFER, colorbuffer);
     // glBufferData(GL_ARRAY_BUFFER, sizeof(g_color_buffer_data), g_color_buffer_data, GL_STATIC_DRAW);
 
-    log_verbose("elements_count:  %ld", donk_result.elements_count);
-    log_verbose("vertices_count:  %ld", donk_result.vertices_count);
-    log_verbose("textures_count:  %ld", donk_result.textures_count);
-    log_verbose("normals_count:  %ld", donk_result.normals_count);
+    // log_verbose("elements_count:  %ld", donk_result.elements_count);
+    // log_verbose("vertices_count:  %ld", donk_result.vertices_count);
+    // log_verbose("textures_count:  %ld", donk_result.textures_count);
+    // log_verbose("normals_count:  %ld", donk_result.normals_count);
 
     GLuint VertexArrayID;
 	glGenVertexArrays(1, &VertexArrayID);
 	glBindVertexArray(VertexArrayID);
+
+    float vertices[] = {
+        -1, 0, -1,
+         1, 0, -1,
+        -1, 0,  1,
+         1, 0,  1,
+        -1, 0.3, -1,
+        -1, 0.3, 1,
+    };
+
+    uint32_t elements[] = {
+        0, 1, 2,
+        3, 2, 1,
+        0, 4, 5,
+        5, 2, 0,
+        // 5, 4, 1
+    };
 
     uint32_t vbuf = 0;
     glGenBuffers(1, &vbuf);
@@ -136,8 +153,8 @@ int main(void) {
     // glBufferData(GL_ARRAY_BUFFER, sizeof(pos), pos, GL_STATIC_DRAW);
     glBufferData(
         GL_ARRAY_BUFFER,
-        donk_result.vertices_count * sizeof(float),
-        donk_result.vertices,
+        sizeof(vertices),
+        vertices,
         GL_STATIC_DRAW
     );
     // glBufferData(GL_ARRAY_BUFFER, sizeof(plane), plane, GL_STATIC_DRAW);
@@ -152,8 +169,8 @@ int main(void) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibuf);
     glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
-        donk_result.elements_count * sizeof(uint32_t),
-        donk_result.elements,
+        sizeof(elements),
+        elements,
         GL_STATIC_DRAW
     );
     // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ind), ind, GL_STATIC_DRAW);
@@ -171,6 +188,7 @@ int main(void) {
     int uloc_projection = glGetUniformLocation(state.gl_program, "projection");
     int uloc_model = glGetUniformLocation(state.gl_program, "model");
     int uloc_wireframe = glGetUniformLocation(state.gl_program, "wireframe");
+    int u_time = glGetUniformLocation(state.gl_program, "u_time");
 
     glClearColor(0.016f, 0.016f, 0.016f, 1.0f);
 
@@ -234,10 +252,12 @@ int main(void) {
         // glm_ortho(0, (float)width, (float)height, 0, -1.0f, 1.0f, projection);
         glm_perspective(
             state.zoom * (GLM_PI / 180.0f),
-            state.width / state.height,
+            1,
             0.01f, 1000.0f, projection
         );
         glUniformMatrix4fv(uloc_projection, 1, GL_FALSE, &projection[0][0]);
+
+        glUniform1f(u_time, time(NULL));
 
         mat4 view;
         glm_mat4_identity(view);
@@ -262,20 +282,20 @@ int main(void) {
         // glDrawArrays(GL_TRIANGLES, 0, LEN(cube) / 3);
         glDrawElements(
             GL_TRIANGLES,
-            donk_result.elements_count * sizeof(uint32_t),
+            sizeof(elements),
             GL_UNSIGNED_INT,
             0
         );
         // glDrawElements(GL_TRIANGLES, sizeof(ind), GL_UNSIGNED_INT, 0);
 
         if (state.wireframe) {
-            glLineWidth(2);
+            glLineWidth(1);
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             glUniform1i(uloc_wireframe, 1);
             // glUniform4f(ucloc, 0, 0, 0, 1);
             glDrawElements(
                 GL_TRIANGLES,
-                donk_result.elements_count * sizeof(uint32_t),
+                sizeof(elements),
                 GL_UNSIGNED_INT,
                 0
             );
