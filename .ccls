@@ -9,3 +9,4 @@ gcc
 -Werror
 -Isrc/include/
 -Ilib/
+-D_GNU_SOURCE

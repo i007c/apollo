@@ -1,0 +1,238 @@
+
+#include "apollo.h"
+#include "logger.h"
+
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+#define LS SECTOR_MAIN_APOLLO
+#define PF "\033[32m%f\033[0m"
+
+// static const char *ENABLED_LAYERS[] = {
+//     "VK_LAYER_KHRONOS_validation",
+//     // "VK_LAYER_LUNARG_api_dump"
+// };
+
+bool window_init(GLFWwindow **win);
+
+static const char *vk_result_string(VkResult result);
+
+
+
+VkInstance instance;
+VkSurfaceKHR surface;
+VkResult result;
+VkDevice device;
+VkPhysicalDevice physical_device;
+
+int main(void) {
+    log_info("Starting Apollo Valkan");
+    srand(time(NULL));
+    
+    GLFWwindow *window;
+    if (!window_init(&window)) return 1;
+
+    // uint32_t vk_ext_count = 0;
+    // vkEnumerateInstanceExtensionProperties(NULL, &vk_ext_count, NULL);
+    // log_info("%d extensions supported", vk_ext_count);
+    // VkExtensionProperties *vk_ext_list = malloc(sizeof(VkExtensionProperties) * vk_ext_count);
+    // vkEnumerateInstanceExtensionProperties(NULL, &vk_ext_count, vk_ext_list);
+    // for (uint32_t i = 0; i < vk_ext_count; i++) {
+    //     log_info(
+    //         "[%d] %s: %d", i,
+    //         vk_ext_list[i].extensionName,
+    //         vk_ext_list[i].specVersion
+    //     );
+    // }
+    // free(vk_ext_list);
+
+
+    // uint32_t vk_layer_count = 0;
+    // vkEnumerateInstanceLayerProperties(&vk_layer_count, NULL);
+    // log_info("%d layers supported", vk_layer_count);
+    //
+    // VkLayerProperties *vk_layer_list = malloc(sizeof(VkLayerProperties) * vk_layer_count);
+    // vkEnumerateInstanceLayerProperties(&vk_layer_count, vk_layer_list);
+    // for (uint32_t i = 0; i < vk_layer_count; i++) {
+    //     log_info(
+    //         "[%d] %s: %d - %d\n\t%s", i,
+    //         vk_layer_list[i].layerName,
+    //         vk_layer_list[i].specVersion, vk_layer_list[i].implementationVersion,
+    //         vk_layer_list[i].description
+    //     );
+    // }
+    // free(vk_layer_list);
+
+    VkApplicationInfo app_info = {
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pApplicationName = "Apollo",
+        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+        .pEngineName = "No Engine",
+        .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion = VK_API_VERSION_1_3
+    };
+
+    VkInstanceCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pApplicationInfo = &app_info,
+    };
+
+    uint32_t glfw_ext_count = 0;
+    const char **glfw_extentions;
+
+    glfw_extentions = glfwGetRequiredInstanceExtensions(&glfw_ext_count);
+    create_info.enabledExtensionCount = glfw_ext_count;
+    create_info.ppEnabledExtensionNames = glfw_extentions;
+
+    // create_info.ppEnabledLayerNames = ENABLED_LAYERS;
+    // create_info.enabledLayerCount = LEN(ENABLED_LAYERS);
+
+
+    
+    if ((result = vkCreateInstance(&create_info, NULL, &instance))) {
+        log_error("instance creation faild: %s", vk_result_string(result));
+    }
+
+
+    uint32_t vk_dev_count = 1;
+    vkEnumeratePhysicalDevices(instance, &vk_dev_count, &physical_device);
+    log_info("%d devices", vk_dev_count);
+
+    if (!vk_dev_count) {
+        log_error("no physical device was found");
+        goto cleanup;
+    }
+
+    if ((result = glfwCreateWindowSurface(instance, window, NULL, &surface))) {
+        log_error("surface creation faild: %s", vk_result_string(result));
+        goto cleanup;
+    }
+
+    uint32_t vk_queue_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &vk_queue_count, NULL);
+    log_info("%d layers supported", vk_queue_count);
+
+    VkQueueFamilyProperties *vk_queue_list = malloc(sizeof(VkQueueFamilyProperties) * vk_queue_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &vk_queue_count, vk_queue_list);
+    for (uint32_t i = 0; i < vk_queue_count; i++) {
+        VkBool32 supported = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &supported);
+        log_info("[%d] %d - %d", i, vk_queue_list[i].queueCount, supported);
+    }
+    free(vk_queue_list);
+
+    VkDeviceQueueCreateInfo queue_create_info = {
+        .queueCount = 1,
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .queueFamilyIndex = 0,
+    };
+    float queue_priority = 1.0f;
+    queue_create_info.pQueuePriorities = &queue_priority;
+
+    VkPhysicalDeviceFeatures device_features;
+    memset(&device_features, 0, sizeof(device_features));
+
+    VkDeviceCreateInfo device_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pQueueCreateInfos = &queue_create_info,
+        .queueCreateInfoCount = 1,
+        .pEnabledFeatures = &device_features,
+        // .enabledLayerCount = LEN(ENABLED_LAYERS),
+        // .ppEnabledLayerNames = ENABLED_LAYERS,
+    };
+
+    
+    if ((result = vkCreateDevice(physical_device, &device_create_info, NULL, &device))) {
+        log_error("device creation faild: %s", vk_result_string(result));
+        goto cleanup;
+    }
+
+    VkQueue queue;
+    vkGetDeviceQueue(device, queue_create_info.queueFamilyIndex, 0, &queue);
+
+
+
+
+    while(!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+    }
+
+cleanup:
+    vkDestroySurfaceKHR(instance, surface, NULL);
+    vkDestroyDevice(device, NULL);
+    vkDestroyInstance(instance, NULL);
+    glfwDestroyWindow(window);
+    glfwTerminate();
+
+    return 0;
+}
+
+static const char *vk_result_string(VkResult result) {
+#define CASE(x) case VK_##x: return #x;
+    switch (result) {
+        CASE(SUCCESS)
+        CASE(NOT_READY)
+        CASE(TIMEOUT)
+        CASE(EVENT_SET)
+        CASE(EVENT_RESET)
+        CASE(INCOMPLETE)
+        CASE(ERROR_OUT_OF_HOST_MEMORY)
+        CASE(ERROR_OUT_OF_DEVICE_MEMORY)
+        CASE(ERROR_INITIALIZATION_FAILED)
+        CASE(ERROR_DEVICE_LOST)
+        CASE(ERROR_MEMORY_MAP_FAILED)
+        CASE(ERROR_LAYER_NOT_PRESENT)
+        CASE(ERROR_EXTENSION_NOT_PRESENT)
+        CASE(ERROR_FEATURE_NOT_PRESENT)
+        CASE(ERROR_INCOMPATIBLE_DRIVER)
+        CASE(ERROR_TOO_MANY_OBJECTS)
+        CASE(ERROR_FORMAT_NOT_SUPPORTED)
+        CASE(ERROR_FRAGMENTED_POOL)
+        CASE(ERROR_UNKNOWN)
+        CASE(ERROR_OUT_OF_POOL_MEMORY)
+        CASE(ERROR_INVALID_EXTERNAL_HANDLE)
+        CASE(ERROR_FRAGMENTATION)
+        CASE(ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS)
+        CASE(PIPELINE_COMPILE_REQUIRED)
+        CASE(ERROR_SURFACE_LOST_KHR)
+        CASE(ERROR_NATIVE_WINDOW_IN_USE_KHR)
+        CASE(SUBOPTIMAL_KHR)
+        CASE(ERROR_OUT_OF_DATE_KHR)
+        CASE(ERROR_INCOMPATIBLE_DISPLAY_KHR)
+        CASE(ERROR_VALIDATION_FAILED_EXT)
+        CASE(ERROR_INVALID_SHADER_NV)
+        CASE(ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR)
+        CASE(ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR)
+        CASE(ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR)
+        CASE(ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR)
+        CASE(ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR)
+        CASE(ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR)
+        CASE(ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT)
+        CASE(ERROR_NOT_PERMITTED_KHR)
+        CASE(ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT)
+        CASE(THREAD_IDLE_KHR)
+        CASE(THREAD_DONE_KHR)
+        CASE(OPERATION_DEFERRED_KHR)
+        CASE(OPERATION_NOT_DEFERRED_KHR)
+    #ifdef VK_ENABLE_BETA_EXTENSIONS
+        CASE(ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR)
+    #endif
+        CASE(ERROR_COMPRESSION_EXHAUSTED_EXT)
+        CASE(ERROR_INCOMPATIBLE_SHADER_BINARY_EXT)
+        // CASE(ERROR_OUT_OF_POOL_MEMORY_KHR)
+        // CASE(ERROR_INVALID_EXTERNAL_HANDLE_KHR)
+        // CASE(ERROR_FRAGMENTATION_EXT)
+        // CASE(ERROR_NOT_PERMITTED_EXT)
+        // CASE(ERROR_INVALID_DEVICE_ADDRESS_EXT)
+        // CASE(ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR)
+        // CASE(PIPELINE_COMPILE_REQUIRED_EXT)
+        // CASE(ERROR_PIPELINE_COMPILE_REQUIRED_EXT)
+        CASE(RESULT_MAX_ENUM)
+        default: return "unknown";
+    }
+#undef CASE
+}

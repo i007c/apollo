@@ -1,9 +1,9 @@
 
 CC = gcc
-CFLAGS  = -std=c11 -Os -g -pedantic -Wall -Wextra -Wpedantic -Werror
-CFLAGS += -Isrc/include/  -Ilib/
+CFLAGS  = -std=c11 -O0 -g -pedantic -Wall -Wextra -Wpedantic -Werror
+CFLAGS += -Isrc/include/  -Ilib/ -D_GNU_SOURCE
 
-LDFLAGS = -lGL -lGLU -lm -lglfw
+LDFLAGS = -lm -lglfw -lvulkan
 # -ldl -lXrandr -lXi -lX11 -lpthread -lglfw -lGLEW
 # -lglut 
 
@@ -24,9 +24,14 @@ build/%.o: %.c $(HEADERS)
 	@echo $<
 
 
-run: clear $(EXEC)
+run: clear $(EXEC) shader/spv/compute.spv
 	$(EXEC)
 
+
+shader/spv/compute.spv:
+	glslc -fshader-stage=compute shader/compute.glsl -o $@
+	# glslc -fshader-stage=frag shader/fragment.glsl  -o shader/spv/fragment.spv
+	# glslc -fshader-stage=vert shader/vertex.glsl    -o shader/spv/vertex.spv
 
 clean:
 	rm -rf $(EXEC) $(OBJECTS)
@@ -36,6 +41,6 @@ clear:
 	printf "\E[H\E[3J"
 	clear
 
-.PHONY: clear run clean
+.PHONY: clear run clean shader/spv/compute.spv
 .SILENT: clear run clean $(EXEC)
 

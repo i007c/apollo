@@ -57,3 +57,5 @@ bin/
 logs/
 tolc/
 object/
+shader/spv/
+sample/
