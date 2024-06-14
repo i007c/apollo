@@ -13,7 +13,7 @@
 
 #include <vulkan/vulkan.h>
 
-#define LS SECTOR_MAIN_APOLLO
+#define LOG_NAME "app"
 #define PF "\033[32m%f\033[0m"
 
 // static const char *ENABLED_LAYERS[] = {
@@ -76,7 +76,7 @@ void cleanup(void) {
     vkDestroyInstance(instance, NULL);
 }
 
-int main(void) {
+int xmain(void) {
     log_info("Starting Apollo Valkan");
 
     VkApplicationInfo app_info = {
