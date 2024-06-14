@@ -11,6 +11,7 @@ const char *status_string(status_t status) {
         CASE(ERR_VK_ERROR);
         CASE(ERR_SDL_WIN_CRATE);
         CASE(ERR_SDL_VK_EXT);
+        default: return "unknown status";
     }
 #undef CASE
 }
@@ -67,6 +68,7 @@ const char *vk_result_string(VkResult result) {
         CASE(ERROR_COMPRESSION_EXHAUSTED_EXT);
         CASE(ERROR_INCOMPATIBLE_SHADER_BINARY_EXT);
         CASE(ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR);
+        default: return "unknown vulkan result";
     }
 #undef CASE
 }
