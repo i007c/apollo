@@ -1,16 +1,19 @@
 
+#include <stdlib.h>
+
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 #include <vulkan/vulkan.h>
 
+#include "apollo.h"
 #include "logger.h"
-#include "stdio.h"
+#include "utils.h"
 
 #define LOG_NAME "main"
-#define unwrap(exp)                                                            \
-    if ((result = exp)) {                                                      \
-        log_trace(#exp " failed");                                             \
-        cleanup();                                                             \
-        return 1;                                                              \
-    }
 
 VkInstance            instance              = NULL;
 VkSurfaceKHR          surface               = NULL;
@@ -38,31 +41,7 @@ void        cleanup(void);
 int main(void) {
     log_info("init");
 
-    VkApplicationInfo app_info = {
-        .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName   = "Apollo",
-        .applicationVersion = VK_MAKE_VERSION(0, 1, 0),
-        .pEngineName        = NULL,
-        .engineVersion      = VK_MAKE_VERSION(0, 0, 0),
-        .apiVersion         = VK_API_VERSION_1_3,
-    };
 
-    VkInstanceCreateInfo create_info = {
-        .sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pApplicationInfo = &app_info,
-    };
-
-    unwrap(vkCreateInstance(&create_info, NULL, &instance));
-
-    uint32_t dev_count = 0;
-    unwrap(vkEnumeratePhysicalDevices(instance, &dev_count, &physical_device));
-    log_info("%d devices", dev_count);
-
-    if (!dev_count) {
-        log_error("no physical device was found");
-        cleanup();
-        return 1;
-    }
 
     return 0;
 }
