@@ -20,7 +20,7 @@
 #define vk_unwrap(exp)                                                         \
     if ((result = exp)) {                                                      \
         log_trace(#exp ": %s", vk_result_string(result));                      \
-        cleanup();                                                             \
+        vulkan_cleanup();                                                      \
         return 1;                                                              \
     }
 

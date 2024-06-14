@@ -36,7 +36,6 @@ VkCommandBuffer       cmd_buffer            = NULL;
 VkPipeline            compute_pipeline      = NULL;
 VkFence               fence                 = NULL;
 
-void cleanup(void);
 
 int main(void) {
     status_t status = OK;
@@ -47,33 +46,4 @@ int main(void) {
     return 0;
 }
 
-void cleanup(void) {
-    if (!instance || !device) return;
-    if (cmd_pool)
-        vkResetCommandPool(
-            device, cmd_pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
-        );
-    if (fence) vkDestroyFence(device, fence, NULL);
-    if (descriptor_set_layout)
-        vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
 
-    if (pipeline_layout) vkDestroyPipelineLayout(device, pipeline_layout, NULL);
-    if (pipeline_cache) vkDestroyPipelineCache(device, pipeline_cache, NULL);
-
-    if (cmd_pool && cmd_buffer)
-        vkFreeCommandBuffers(device, cmd_pool, 1, &cmd_buffer);
-
-    if (shader_module) vkDestroyShaderModule(device, shader_module, NULL);
-    if (compute_pipeline) vkDestroyPipeline(device, compute_pipeline, NULL);
-    if (descriptor_pool) vkDestroyDescriptorPool(device, descriptor_pool, NULL);
-    if (cmd_pool) vkDestroyCommandPool(device, cmd_pool, NULL);
-
-    if (in_buffer) vkDestroyBuffer(device, in_buffer, NULL);
-    if (out_buffer) vkDestroyBuffer(device, out_buffer, NULL);
-
-    if (in_memory) vkFreeMemory(device, in_memory, NULL);
-    if (out_memory) vkFreeMemory(device, out_memory, NULL);
-
-    vkDestroyDevice(device, NULL);
-    vkDestroyInstance(instance, NULL);
-}
