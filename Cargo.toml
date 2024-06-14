@@ -4,5 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-winit = "0.30"
+winit = { version = "0.30", features = ["rwh_05"] }
 vulkano = "0.34"
+log = "0.4"
+dotenvy = "0.15"
+pretty_env_logger = "0.4"
