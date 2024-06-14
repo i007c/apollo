@@ -21,7 +21,7 @@
 //     // "VK_LAYER_LUNARG_api_dump"
 // };
 
-static const char *vk_result_string(VkResult result);
+const char *vk_result_string(VkResult result);
 
 VkInstance instance;
 VkSurfaceKHR surface;
@@ -49,53 +49,7 @@ VkPipeline compute_pipeline;
 
 VkFence fence;
 
-void cleanup(void) {
-    vkResetCommandPool(device, cmd_pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT);
-    vkDestroyFence(device, fence, NULL);
-    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
-
-    vkDestroyPipelineLayout(device, pipeline_layout, NULL);
-    vkDestroyPipelineCache(device, pipeline_cache, NULL);
-
-    vkFreeCommandBuffers(device, cmd_pool, 1, &cmd_buffer);
-
-    vkDestroyShaderModule(device, shader_module, NULL);
-    vkDestroyPipeline(device, compute_pipeline, NULL);
-    vkDestroyDescriptorPool(device, descriptor_pool, NULL);
-    vkDestroyCommandPool(device, cmd_pool, NULL);
-
-    vkDestroyBuffer(device, in_buffer, NULL);
-    vkDestroyBuffer(device, out_buffer, NULL);
-
-    vkFreeMemory(device, in_memory, NULL);
-    vkFreeMemory(device, out_memory, NULL);
-
-
-
-    vkDestroyDevice(device, NULL);
-    vkDestroyInstance(instance, NULL);
-}
-
 int xmain(void) {
-    log_info("Starting Apollo Valkan");
-
-    VkApplicationInfo app_info = {
-        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "Apollo",
-        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-        .pEngineName = "No Engine",
-        .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-        .apiVersion = VK_API_VERSION_1_3
-    };
-
-    VkInstanceCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pApplicationInfo = &app_info,
-    };
-
-    if ((result = vkCreateInstance(&create_info, NULL, &instance))) {
-        log_error("instance creation faild: %s", vk_result_string(result));
-    }
 
     uint32_t vk_dev_count = 1;
     vkEnumeratePhysicalDevices(instance, &vk_dev_count, &physical_device);
@@ -513,40 +467,3 @@ int xmain(void) {
     return 0;
 }
 
-static const char *vk_result_string(VkResult result) {
-#define CASE(x) case VK_##x: return #x;
-    switch (result) {
-        CASE(SUCCESS) CASE(NOT_READY) CASE(TIMEOUT) CASE(EVENT_SET)
-        CASE(EVENT_RESET) CASE(INCOMPLETE) CASE(ERROR_OUT_OF_HOST_MEMORY)
-        CASE(ERROR_OUT_OF_DEVICE_MEMORY) CASE(ERROR_INITIALIZATION_FAILED)
-        CASE(ERROR_DEVICE_LOST) CASE(ERROR_MEMORY_MAP_FAILED)
-        CASE(ERROR_LAYER_NOT_PRESENT) CASE(ERROR_EXTENSION_NOT_PRESENT)
-        CASE(ERROR_FEATURE_NOT_PRESENT) CASE(ERROR_INCOMPATIBLE_DRIVER)
-        CASE(ERROR_TOO_MANY_OBJECTS) CASE(ERROR_FORMAT_NOT_SUPPORTED)
-        CASE(ERROR_FRAGMENTED_POOL) CASE(ERROR_UNKNOWN)
-        CASE(ERROR_OUT_OF_POOL_MEMORY) CASE(ERROR_INVALID_EXTERNAL_HANDLE)
-        CASE(ERROR_FRAGMENTATION) CASE(ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS)
-        CASE(PIPELINE_COMPILE_REQUIRED) CASE(ERROR_SURFACE_LOST_KHR)
-        CASE(ERROR_NATIVE_WINDOW_IN_USE_KHR) CASE(SUBOPTIMAL_KHR)
-        CASE(ERROR_OUT_OF_DATE_KHR) CASE(ERROR_INCOMPATIBLE_DISPLAY_KHR)
-        CASE(ERROR_VALIDATION_FAILED_EXT) CASE(ERROR_INVALID_SHADER_NV)
-        CASE(ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR)
-        CASE(ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR)
-        CASE(ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR)
-        CASE(ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR)
-        CASE(ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR)
-        CASE(ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR)
-        CASE(ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT)
-        CASE(ERROR_NOT_PERMITTED_KHR)
-        CASE(ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT) CASE(THREAD_IDLE_KHR)
-        CASE(THREAD_DONE_KHR) CASE(OPERATION_DEFERRED_KHR)
-        CASE(OPERATION_NOT_DEFERRED_KHR)
-    #ifdef VK_ENABLE_BETA_EXTENSIONS
-        CASE(ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR)
-    #endif
-        CASE(ERROR_COMPRESSION_EXHAUSTED_EXT)
-        CASE(ERROR_INCOMPATIBLE_SHADER_BINARY_EXT) CASE(RESULT_MAX_ENUM)
-        default: return "unknown";
-    }
-#undef CASE
-}
