@@ -1,23 +1,25 @@
 
-#include "logger.h"
-
-#include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <time.h>
-#include <string.h>
+#include <stdio.h>
+
+#include <dirent.h>
 #include <errno.h>
+#include <string.h>
+#include <time.h>
 #include <unistd.h>
-#include <fcntl.h>
+
 #include <sys/stat.h>
 #include <sys/time.h>
 
-#define MESSAGE_MAX 8196
-#define INFO_MAX 512
-#define NAME_MAX 50
-#define PATH_MAX NAME_MAX + 16
+#include "logger.h"
 
+#define MESSAGE_MAX   8196
+#define LOG_INFO_MAX  512
+#define FILE_SIZE_MAX (1024 * 1024 * 10)  // 10 mg
+
+#define LEN(array) sizeof(array) / sizeof(array[0])
 
 typedef struct DateTime {
     uint8_t month;
@@ -29,49 +31,17 @@ typedef struct DateTime {
     uint8_t week;
 } DateTime;
 
-typedef struct SectorFile {
-    FILE *file;
-    char name[NAME_MAX];
-    char path[PATH_MAX];
-} SectorFile;
-
-
-
-static uint8_t sector_file_day = 0;
-
-static SectorFile SECTORS[] = {
-    [SECTOR_MAIN / 100]   = { NULL, "main",   "" },
-};
-
-static char* SUB_SECTOR_NAMES[] = {
-    [SECTOR_MAIN_APOLLO]         = "apollo",
-    [SECTOR_MAIN_SHADER]         = "shader",
-    [SECTOR_MAIN_WINDOW]         = "window",
-};
-
-static void make_dirs(void) {
-    char dirname[NAME_MAX + 5] = "logs/";
-
-    mkdir("logs", 0755);
-
-    for (uint8_t i = 0; i < SECTOR_LENGTH / 100; i++) {
-        memcpy(&dirname[5], SECTORS[i].name, NAME_MAX);
-        // snprintf(dirname, sizeof(dirname), "logs/%s", SECTORS[i].name);
-        mkdir(dirname, 0755);
-    }
-}
-
 static void get_datetime(DateTime *datetime) {
     struct timeval tv;
-    time_t rawtime = time(NULL);
-    struct tm *timeinfo = localtime(&rawtime);
+    time_t         rawtime  = time(NULL);
+    struct tm     *timeinfo = localtime(&rawtime);
 
-    datetime->month = timeinfo->tm_mon + 1;
-    datetime->day = timeinfo->tm_mday;
-    datetime->hour = timeinfo->tm_hour;
+    datetime->month   = timeinfo->tm_mon + 1;
+    datetime->day     = timeinfo->tm_mday;
+    datetime->hour    = timeinfo->tm_hour;
     datetime->minutes = timeinfo->tm_min;
     datetime->seconds = timeinfo->tm_sec;
-    datetime->week = timeinfo->tm_yday / 7;
+    datetime->week    = timeinfo->tm_yday / 7;
 
     if (gettimeofday(&tv, NULL) < 0)
         datetime->ms = 0;
@@ -79,31 +49,46 @@ static void get_datetime(DateTime *datetime) {
         datetime->ms = (uint8_t)(tv.tv_usec / 10000);
 }
 
-static void update_sectors(DateTime *datetime) {
-    bool called_make_dirs = false;
-    FILE *fd = NULL;
+static FILE  *file          = NULL;
+static size_t file_size     = 0;
+static char   file_path[50] = { 0 };
 
-    for (uint8_t i = 0; i < SECTOR_LENGTH / 100; i++) {
-        strcpy(SECTORS[i].path, "logs/");
-        memcpy(&SECTORS[i].path[5], SECTORS[i].name, NAME_MAX);
-        snprintf(
-            &SECTORS[i].path[strlen(SECTORS[i].path)],
-            9, "/%02d.log", datetime->week
-        );
-
-        fd = fopen(SECTORS[i].path, "a");
-        if (!called_make_dirs && fd == NULL && errno == ENOENT) {
-            make_dirs();
-            called_make_dirs = true;
-            fd = fopen(SECTORS[i].path, "a");
-        }
-
-        if (SECTORS[i].file != NULL) fclose(SECTORS[i].file);
-
-        SECTORS[i].file = fd;
+static int update_file(void) {
+    if (file != NULL && file_path[0] != 0 && file_size < FILE_SIZE_MAX &&
+        !access(file_path, F_OK)) {
+        return 0;
     }
 
-    sector_file_day = datetime->day;
+    mkdir("logs", 0755);
+
+    DIR           *dir;
+    struct dirent *de;
+    uint32_t       file_iter = 0;
+
+    if ((dir = opendir("logs")) == NULL) {
+        return 1;
+    }
+
+    while ((de = readdir(dir)) != NULL) {
+        // ignore the ".." and "." dir and all the hidden stuff
+        if (de->d_name[0] == '.') continue;
+
+        uint32_t n = 0;
+        if (sscanf(de->d_name, "%u.log", &n) < 1) continue;
+        if (n > file_iter) file_iter = n;
+    }
+
+    snprintf(file_path, 50, "logs/%u.log", file_iter);
+    if ((file = fopen(file_path, "a")) == NULL) return 1;
+
+    file_size = ftell(file);
+    if (file_size >= FILE_SIZE_MAX) {
+        snprintf(file_path, 50, "logs/%u.log", file_iter + 1);
+        if ((file = fopen(file_path, "a")) == NULL) return 1;
+        file_size = 0;
+    }
+
+    return 0;
 }
 
 static char *get_tag(Flag flag, bool color) {
@@ -120,27 +105,26 @@ static char *get_tag(Flag flag, bool color) {
     }
 
     switch (flag) {
-        case LF_VERB:  return "<VERB>";
-        case LF_INFO:  return "<INFO>";
-        case LF_WARN:  return "<WARN>";
-        case LF_DBUG:  return "<DBUG>";
-        case LF_EROR:  return "<EROR>";
-        case LF_BRAK:  return "";
+        case LF_VERB: return "<VERB>";
+        case LF_INFO: return "<INFO>";
+        case LF_WARN: return "<WARN>";
+        case LF_DBUG: return "<DBUG>";
+        case LF_EROR: return "<EROR>";
+        case LF_BRAK: return "";
     }
 
     return "NULL";
 }
 
-void logger(const Sector index, const Flag flag, const char *format, ...) {
-
+void logger(char *name, const Flag flag, const char *format, ...) {
     DateTime datetime;
-    va_list args;
+    va_list  args;
 
-    SectorFile *sector = &SECTORS[index / 100];
+    // SectorFile *sector = &SECTORS[index / 100];
 
     char message[MESSAGE_MAX];
-    char info[INFO_MAX];
-    char info_color[INFO_MAX];
+    char info[LOG_INFO_MAX];
+    char info_color[LOG_INFO_MAX];
 
     // format the message
     va_start(args, format);
@@ -150,17 +134,28 @@ void logger(const Sector index, const Flag flag, const char *format, ...) {
     // update the datetime
     get_datetime(&datetime);
     snprintf(
-        info, sizeof(info), "%02d-%02d %02d:%02d:%02d.%03d %s", 
-        datetime.month, datetime.day, datetime.hour,
-        datetime.minutes, datetime.seconds, datetime.ms,
+        info,
+        sizeof(info),
+        "%02d-%02d %02d:%02d:%02d.%03d %s",
+        datetime.month,
+        datetime.day,
+        datetime.hour,
+        datetime.minutes,
+        datetime.seconds,
+        datetime.ms,
         get_tag(flag, false)
     );
 
     snprintf(
-        info_color, sizeof(info_color),
-        "\033[32m%02d-%02d %02d:%02d:%02d.%03d\033[0m %s", 
-        datetime.month, datetime.day, datetime.hour,
-        datetime.minutes, datetime.seconds, datetime.ms,
+        info_color,
+        sizeof(info_color),
+        "\033[32m%02d-%02d %02d:%02d:%02d.%03d\033[0m %s",
+        datetime.month,
+        datetime.day,
+        datetime.hour,
+        datetime.minutes,
+        datetime.seconds,
+        datetime.ms,
         get_tag(flag, true)
     );
 
@@ -168,41 +163,28 @@ void logger(const Sector index, const Flag flag, const char *format, ...) {
     if (flag == LF_BRAK)
         printf("\n");
     else {
-        printf("%s [\033[36m%s", info_color, sector->name);
-        if (index % 100) printf(".%s", SUB_SECTOR_NAMES[index]);
-        printf("\033[0m] %s\n", message);
+        printf("%s [\033[36m%s\033[0m] %s\n", info_color, name, message);
     }
 
-    // log to file
-    if (datetime.day != sector_file_day || access(sector->path, F_OK))
-        update_sectors(&datetime);
+    if (flag == LF_VERB) return;
+    update_file();
 
-    if (flag == LF_VERB)
-        return;
-
-    if (sector->file != NULL) {
+    if (file != NULL) {
         if (flag == LF_BRAK)
-            fprintf(sector->file, "\n");
+            fprintf(file, "\n");
         else
-            fprintf(sector->file, "%s %s\n", info, message);
-        fflush(sector->file);
+            fprintf(file, "%s: %s %s\n", name, info, message);
+        fflush(file);
+        file_size = ftell(file);
     } else {
-        update_sectors(&datetime);
+        printf("invalid log file\n");
     }
-    
 }
 
-
-void logger_setup(void) {
-    DateTime datetime;
-    get_datetime(&datetime);
-    make_dirs();
-    update_sectors(&datetime);
+int logger_setup(void) {
+    return update_file();
 }
 
 void logger_clean(void) {
-    for (uint8_t i = 0; i < 1; i++) {
-        if (SECTORS[i].file != NULL)
-            fclose(SECTORS[i].file);
-    }
+    if (file != NULL) fclose(file);
 }

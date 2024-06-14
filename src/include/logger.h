@@ -1,28 +1,10 @@
 
-#ifndef __APOLLO_LOGGER_H__
-#define __APOLLO_LOGGER_H__
+#ifndef __PLUTUS_LOGGER_H__
+#define __PLUTUS_LOGGER_H__
 
 #define LOG_TRACE_LVL1(LINE) #LINE
 #define LOG_TRACE_LVL2(LINE) LOG_TRACE_LVL1(LINE)
-#define LOG_THROW_LOCATION "[" __FILE__ ":" LOG_TRACE_LVL2(__LINE__) "] "
-
-typedef enum {
-    SECTOR_MAIN                   = 000,
-    SECTOR_MAIN_APOLLO            = 001,
-    SECTOR_MAIN_SHADER            = 002,
-    SECTOR_MAIN_WINDOW            = 003,
-    // SECTOR_USER                   = 100,
-    // SECTOR_USER_AGENT             = 101,
-    // SECTOR_USER_PHONE             = 102,
-    // SECTOR_ADMIN                  = 200,
-    // SECTOR_SERVER                 = 300,
-    // SECTOR_EATERY                 = 400,
-    // SECTOR_EATERY_DISH            = 401,
-    // SECTOR_EATERY_REVIEW          = 402,
-    // SECTOR_DETAIL                 = 500,
-    SECTOR_LENGTH                 = 100,
-} Sector; 
-
+#define LOG_THROW_LOCATION   "[" __FILE__ ":" LOG_TRACE_LVL2(__LINE__) "] "
 
 typedef enum {
     LF_VERB,
@@ -33,17 +15,25 @@ typedef enum {
     LF_BRAK,
 } Flag;
 
-#define log_verbose(...)  logger(LS, LF_VERB, __VA_ARGS__)
-#define log_info(...)     logger(LS, LF_INFO, __VA_ARGS__)
-#define log_warn(...)     logger(LS, LF_WARN, __VA_ARGS__)
-#define log_debug(...)    logger(LS, LF_DBUG, __VA_ARGS__)
-#define log_error(...)    logger(LS, LF_EROR, __VA_ARGS__)
-#define log_trace(...)    logger(LS, LF_EROR, LOG_THROW_LOCATION __VA_ARGS__)
-#define log_break()       logger(LS, LF_BRAK, "")
-#define log_errno(fmt, ...)\
-logger(LS, LF_EROR, fmt" %d. %s", __VA_ARGS__, strerror(errno))
+#define log_verbose(...) logger(LOG_NAME, LF_VERB, __VA_ARGS__)
+#define log_info(...)    logger(LOG_NAME, LF_INFO, __VA_ARGS__)
+#define log_warn(...)    logger(LOG_NAME, LF_WARN, __VA_ARGS__)
+#define log_debug(...)   logger(LOG_NAME, LF_DBUG, __VA_ARGS__)
+#define log_error(...)   logger(LOG_NAME, LF_EROR, __VA_ARGS__)
+#define log_trace(...)   logger(LOG_NAME, LF_EROR, LOG_THROW_LOCATION __VA_ARGS__)
+#define log_break()      logger(LOG_NAME, LF_BRAK, "")
 
-void logger(const Sector index, const Flag flag, const char *format, ...);
+#define logh_verbose(...) logger(H->B.name, LF_VERB, __VA_ARGS__)
+#define logh_info(...)    logger(H->B.name, LF_INFO, __VA_ARGS__)
+#define logh_warn(...)    logger(H->B.name, LF_WARN, __VA_ARGS__)
+#define logh_debug(...)   logger(H->B.name, LF_DBUG, __VA_ARGS__)
+#define logh_error(...)   logger(H->B.name, LF_EROR, __VA_ARGS__)
+#define logh_trace(...)   logger(H->B.name, LF_EROR, LOG_THROW_LOCATION __VA_ARGS__)
+#define logh_break()      logger(H->B.name, LF_BRAK, "")
 
+void logger(char *name, const Flag flag, const char *format, ...);
 
-#endif // __APOLLO_LOGGER_H__
+int  logger_setup(void);
+void logger_clean(void);
+
+#endif  // __PLUTUS_LOGGER_H__
