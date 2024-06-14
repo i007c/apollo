@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS  = -std=c11 -O0 -g -pedantic -Wall -Wextra -Wpedantic -Werror
 CFLAGS += -Isrc/include/  -Ilib/ -D_GNU_SOURCE
 
-LDFLAGS = -lm -lglfw -lvulkan
+LDFLAGS = -lm -lglfw -lvulkan -lSDL2
 # -ldl -lXrandr -lXi -lX11 -lpthread -lglfw -lGLEW
 # -lglut 
 
