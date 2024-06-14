@@ -51,16 +51,6 @@ VkFence fence;
 
 int xmain(void) {
 
-    uint32_t vk_dev_count = 1;
-    vkEnumeratePhysicalDevices(instance, &vk_dev_count, &physical_device);
-    log_info("%d devices", vk_dev_count);
-
-    if (!vk_dev_count) {
-        log_error("no physical device was found");
-        cleanup();
-        return 1;
-    }
-
     uint32_t compute_queue_family = 0;
     uint32_t queue_family_count = 0;
 
