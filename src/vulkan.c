@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 
+#include "common.h"
 #include "logger.h"
 #include "utils.h"
 
@@ -28,10 +29,10 @@ int vulkan_init(void) {
         .pApplicationInfo = &app_info,
     };
 
-    unwrap(vkCreateInstance(&create_info, NULL, &instance));
+    vk_unwrap(vkCreateInstance(&create_info, NULL, &instance));
 
     uint32_t dev_count = 100;
-    unwrap(vkEnumeratePhysicalDevices(instance, &dev_count, &physical_device));
+    vk_unwrap(vkEnumeratePhysicalDevices(instance, &dev_count, &physical_device));
     log_info("%d devices", dev_count);
 
     if (!dev_count) {

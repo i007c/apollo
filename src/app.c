@@ -51,24 +51,6 @@ VkFence fence;
 
 int xmain(void) {
 
-    uint32_t compute_queue_family = 0;
-    uint32_t queue_family_count = 0;
-
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, NULL);
-
-    VkQueueFamilyProperties *queue_family_list = malloc(
-        sizeof(VkQueueFamilyProperties) * queue_family_count
-    );
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, queue_family_list);
-
-    for (uint32_t i = 0; i < queue_family_count; i++) {
-        if (queue_family_list[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
-            compute_queue_family = i;
-            break;
-        }
-    }
-
-    log_info("compute_queue_family: %d", compute_queue_family);
 
 
     float queue_priority = 1.0f;
