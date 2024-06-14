@@ -1,7 +1,7 @@
 #ifndef __APOLLO_UTILS_H__
 #define __APOLLO_UTILS_H__
 
-#include "apollo.h"
+#include <vulkan/vulkan.h>
 
 const char *vk_result_string(VkResult result);
 
