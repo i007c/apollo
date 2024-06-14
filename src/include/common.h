@@ -24,15 +24,17 @@
         return 1;                                                              \
     }
 
-#define unwrap_log(exp, name)                                                  \
+#define unwrap_log(exp)                                                        \
     if ((status = exp)) {                                                      \
-        log_trace(#exp ": %d", status);                                        \
+        log_trace(#exp ": [%d]: %s", status, status_string(status));           \
         return status;                                                         \
     }
 
 typedef enum status_t {
-    AST_SUCCESS  = 0,
-    AST_VK_ERROR = 1,
+    OK = 0,
+    ERR_VK_ERROR,
+    ERR_SDL_WIN_CRATE,
+    ERR_SDL_VK_EXT,
 } status_t;
 
 #define status_r status_t __attribute__((warn_unused_result))
