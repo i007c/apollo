@@ -12,6 +12,7 @@
 #include "common.h"
 #include "logger.h"
 #include "utils.h"
+#include "window.h"
 
 #define LOG_NAME "main"
 
@@ -35,11 +36,13 @@ VkCommandBuffer       cmd_buffer            = NULL;
 VkPipeline            compute_pipeline      = NULL;
 VkFence               fence                 = NULL;
 
-const char *vk_result_string(VkResult result);
-void        cleanup(void);
+void cleanup(void);
 
 int main(void) {
+    status_t status = OK;
     log_info("init");
+
+    unwrap_log(window_init());
 
     return 0;
 }
