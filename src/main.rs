@@ -9,7 +9,7 @@ use vulkano::{
     image::ImageUsage,
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
-    pipeline::graphics::vertex_input::{Vertex, VertexDefinition},
+    pipeline::{graphics::vertex_input::{Vertex, VertexDefinition}, PipelineShaderStageCreateInfo},
     swapchain::{Surface, Swapchain, SwapchainCreateInfo},
     VulkanLibrary,
 };
@@ -223,5 +223,10 @@ fn main() {
         let vertex_input_state = Vertex::per_vertex()
             .definition(&vs.info().input_interface)
             .expect("vertex definitions");
+
+        let stages = [
+            PipelineShaderStageCreateInfo::new(vs),
+            PipelineShaderStageCreateInfo::new(fs),
+        ];
     };
 }
