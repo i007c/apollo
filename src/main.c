@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <vulkan/vulkan.h>
 
-#include "apollo.h"
+#include "common.h"
 #include "logger.h"
 #include "utils.h"
 
@@ -40,8 +40,6 @@ void        cleanup(void);
 
 int main(void) {
     log_info("init");
-
-
 
     return 0;
 }

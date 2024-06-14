@@ -2,43 +2,39 @@
 #ifndef __APOLLO_COMMON_H__
 #define __APOLLO_COMMON_H__
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+#include <stdint.h>
+
+#define LEN(array) sizeof(array) / sizeof(array[0])
+
+#if defined(__GNUC__) || defined(__clang__)
+#define UNUSED(name) _unused_##name __attribute__((unused))
+#else
+#define UNUSED(name) _unused_##name
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <stdarg.h>
-#include <stdbool.h>
+#define unwrap(exp)                                                            \
+    if ((status = exp)) {                                                      \
+        return status;                                                         \
+    }
 
-#include <assert.h>
-#include <math.h>
-#include <time.h>
-#include <inttypes.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <endian.h>
+#define vk_unwrap(exp)                                                         \
+    if ((result = exp)) {                                                      \
+        log_trace(#exp ": %s", vk_result_string(result));                      \
+        cleanup();                                                             \
+        return 1;                                                              \
+    }
 
-#include <sys/random.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/types.h>
+#define unwrap_log(exp, name)                                                  \
+    if ((status = exp)) {                                                      \
+        log_trace(#exp ": %d", status);                                        \
+        return status;                                                         \
+    }
 
+typedef enum status_t {
+    AST_SUCCESS  = 0,
+    AST_VK_ERROR = 1,
+} status_t;
 
-// #include <GL/glew.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <GL/glut.h>
+#define status_r status_t __attribute__((warn_unused_result))
 
-
-
-
-
-#endif //__APOLLO_COMMON_H__
-
+#endif  // __APOLLO_COMMON_H__
