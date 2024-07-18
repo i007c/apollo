@@ -1,33 +1,34 @@
 use std::sync::Arc;
 
-use egui_winit_vulkano::Gui;
+use egui_winit_vulkano::{Gui, GuiConfig};
 use vulkano::{
     device::{Device, Queue},
     image::Image,
     instance::Instance,
     pipeline::graphics::viewport::Viewport,
-    swapchain::Surface,
+    swapchain::{Surface, Swapchain},
 };
 use winit::{
     event_loop::EventLoop,
     window::{Window, WindowBuilder},
 };
 
-use crate::objects::{allocators::Allocators, device, instance};
+use crate::objects::{allocators::Allocators, device, instance, swapchain};
 
 pub struct RenderContext {
-    instance: Instance,
+    instance: Arc<Instance>,
     pub window: Arc<Window>,
     pub viewport: Viewport,
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
     pub allocators: Allocators,
+    pub swapchain: Arc<Swapchain>,
     pub images: Vec<Arc<Image>>,
     pub gui: Gui,
 }
 
 impl RenderContext {
-    pub fn init(event_loop: &EventLoop<()>) {
+    pub fn init(event_loop: &EventLoop<()>) -> Self {
         let instance = instance::new(event_loop);
         let window = Arc::new(
             WindowBuilder::new()
@@ -44,5 +45,31 @@ impl RenderContext {
         };
 
         let (device, queue) = device::get(&instance, &surface);
+        let (swapchain, images) = swapchain::new(&device, &surface, &window);
+
+        let allocators = Allocators::new(device.clone());
+
+        let gui = Gui::new(
+            event_loop,
+            surface.clone(),
+            queue.clone(),
+            vulkano::format::Format::B8G8R8A8_UNORM,
+            GuiConfig {
+                is_overlay: true,
+                ..Default::default()
+            },
+        );
+
+        Self {
+            instance,
+            window,
+            viewport,
+            device,
+            queue,
+            allocators,
+            swapchain,
+            images,
+            gui,
+        }
     }
 }

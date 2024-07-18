@@ -12,6 +12,9 @@ use vulkano::{
 pub fn get(instance: &Arc<Instance>, surface: &Arc<Surface>) -> (Arc<Device>, Arc<Queue>) {
     let device_extensions = DeviceExtensions {
         khr_swapchain: true,
+        khr_shader_draw_parameters: true,
+        khr_image_format_list: true,
+        khr_swapchain_mutable_format: true,
         ..DeviceExtensions::empty()
     };
 
