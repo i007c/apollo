@@ -1,25 +1,16 @@
 use cgmath::{Matrix3, Matrix4, Point3, Rad, Vector3};
 use model::{Normal, Position, INDICES, NORMALS, POSITIONS};
-use std::{sync::Arc, time::Instant};
+use std::{process::Command, sync::Arc, time::Instant};
 use vulkano::{
     buffer::{
         allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo},
         Buffer, BufferCreateInfo, BufferUsage,
     },
-    command_buffer::{
-        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
-        RenderPassBeginInfo,
-    },
-    descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet,
-    },
-    device::{
-        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceOwned,
-        Queue, QueueCreateInfo, QueueFlags,
-    },
+    command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo},
+    descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
+    device::DeviceOwned,
     format::Format,
     image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
-    instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
         graphics::{
@@ -38,17 +29,13 @@ use vulkano::{
     },
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
     shader::EntryPoint,
-    swapchain::{
-        acquire_next_image, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo,
-    },
+    swapchain::{acquire_next_image, SwapchainCreateInfo, SwapchainPresentInfo},
     sync::{self, GpuFuture},
-    Validated, VulkanError, VulkanLibrary,
+    Validated, VulkanError,
 };
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
-    platform::run_return::EventLoopExtRunReturn,
-    window::{Window, WindowBuilder},
+    event_loop::{ControlFlow, EventLoop},
 };
 
 mod model;
@@ -58,6 +45,9 @@ mod render;
 fn main() {
     dotenvy::from_path(".env").expect("no .env file");
     pretty_env_logger::init();
+
+    #[cfg(unix)]
+    Command::new("notify-send").arg("apollo").spawn().unwrap();
 
     let event_loop = EventLoop::new();
     let mut ctx = render::context::RenderContext::init(&event_loop);
@@ -258,15 +248,19 @@ fn main() {
                 )
                 .unwrap();
 
-                let (image_index, suboptimal, acquire_future) =
-                    match acquire_next_image(ctx.swapchain.clone(), None).map_err(Validated::unwrap) {
-                        Ok(r) => r,
-                        Err(VulkanError::OutOfDate) => {
-                            recreate_swapchain = true;
-                            return;
-                        }
-                        Err(e) => panic!("failed to acquire next image: {e}"),
-                    };
+                let (image_index, suboptimal, acquire_future) = match acquire_next_image(
+                    ctx.swapchain.clone(),
+                    None,
+                )
+                .map_err(Validated::unwrap)
+                {
+                    Ok(r) => r,
+                    Err(VulkanError::OutOfDate) => {
+                        recreate_swapchain = true;
+                        return;
+                    }
+                    Err(e) => panic!("failed to acquire next image: {e}"),
+                };
 
                 if suboptimal {
                     recreate_swapchain = true;
@@ -319,7 +313,10 @@ fn main() {
                     .unwrap()
                     .then_swapchain_present(
                         ctx.queue.clone(),
-                        SwapchainPresentInfo::swapchain_image_index(ctx.swapchain.clone(), image_index),
+                        SwapchainPresentInfo::swapchain_image_index(
+                            ctx.swapchain.clone(),
+                            image_index,
+                        ),
                     )
                     .then_signal_fence_and_flush();
 
