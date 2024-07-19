@@ -39,8 +39,9 @@ use winit::{
 };
 
 mod model;
-mod objects;
+mod object;
 mod render;
+mod shader;
 
 fn main() {
     dotenvy::from_path(".env").expect("no .env file");
@@ -138,11 +139,11 @@ fn main() {
     )
     .unwrap();
 
-    let vs = vs::load(ctx.device.clone())
+    let vs = shader::vs::load(ctx.device.clone())
         .unwrap()
         .entry_point("main")
         .unwrap();
-    let fs = fs::load(ctx.device.clone())
+    let fs = shader::fs::load(ctx.device.clone())
         .unwrap()
         .entry_point("main")
         .unwrap();
@@ -227,7 +228,7 @@ fn main() {
                     );
                     let scale = Matrix4::from_scale(0.01);
 
-                    let uniform_data = vs::Data {
+                    let uniform_data = shader::vs::Data {
                         world: Matrix4::from(rotation).into(),
                         view: (view * scale).into(),
                         proj: proj.into(),
@@ -437,18 +438,4 @@ fn window_size_dependent_setup(
     };
 
     (pipeline, framebuffers)
-}
-
-mod vs {
-    vulkano_shaders::shader! {
-        ty: "vertex",
-        path: "src/vert.glsl",
-    }
-}
-
-mod fs {
-    vulkano_shaders::shader! {
-        ty: "fragment",
-        path: "src/frag.glsl",
-    }
 }

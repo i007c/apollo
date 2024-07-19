@@ -13,7 +13,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use crate::objects::{allocators::Allocators, device, instance, swapchain};
+use crate::object::{allocators::Allocators, device, instance, swapchain};
 
 pub struct RenderContext {
     instance: Arc<Instance>,
