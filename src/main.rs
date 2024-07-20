@@ -53,16 +53,6 @@ fn main() {
     let event_loop = EventLoop::new();
     let mut ctx = render::context::RenderContext::init(&event_loop);
 
-    // event_loop.run(move |event, _, control| match event {
-    //     Event::WindowEvent {
-    //         event: WindowEvent::CloseRequested,
-    //         ..
-    //     } => {
-    //         *control = ControlFlow::Exit;
-    //     }
-    //     _ => todo!("not impl"),
-    // });
-
     let vertex_buffer = Buffer::from_iter(
         ctx.allocators.memory.clone(),
         BufferCreateInfo {
