@@ -146,12 +146,19 @@ fn main() {
         render_pass.clone(),
     );
     let mut recreate_swapchain = false;
+    let mut recreate_swapchain_timer: Option<Instant> = None;
 
     let mut previous_frame_end = Some(sync::now(ctx.device.clone()).boxed());
     let rotation_start = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
+            Event::WindowEvent {
+                event: WindowEvent::Moved(_),
+                ..
+            } => {
+                recreate_swapchain_timer = Some(Instant::now());
+            }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
@@ -163,8 +170,15 @@ fn main() {
                 ..
             } => {
                 recreate_swapchain = true;
+                recreate_swapchain_timer = Some(Instant::now());
             }
             Event::RedrawEventsCleared => {
+                if let Some(rst) = recreate_swapchain_timer {
+                    if rst.elapsed().as_millis() < 100 {
+                        return;
+                    }
+                }
+
                 let image_extent: [u32; 2] = ctx.window.inner_size().into();
 
                 if image_extent.contains(&0) {
@@ -193,6 +207,7 @@ fn main() {
                     pipeline = new_pipeline;
                     framebuffers = new_framebuffers;
                     recreate_swapchain = false;
+                    recreate_swapchain_timer = None;
                 }
 
                 let uniform_buffer_subbuffer = {
@@ -267,7 +282,7 @@ fn main() {
                     .begin_render_pass(
                         RenderPassBeginInfo {
                             clear_values: vec![
-                                Some([0.0, 0.0, 1.0, 1.0].into()),
+                                Some([0.015, 0.015, 0.015, 1.0].into()),
                                 Some(1f32.into()),
                             ],
                             ..RenderPassBeginInfo::framebuffer(
