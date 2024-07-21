@@ -1,4 +1,5 @@
 use cgmath::{Matrix3, Matrix4, Point3, Rad, Vector3};
+use egui_winit_vulkano::egui;
 use model::{Normal, Position, INDICES, NORMALS, POSITIONS};
 use std::{process::Command, sync::Arc, time::Instant};
 use vulkano::{
@@ -10,7 +11,10 @@ use vulkano::{
     descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::DeviceOwned,
     format::Format,
-    image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
+    image::{
+        view::{ImageView, ImageViewCreateInfo},
+        Image, ImageCreateInfo, ImageType, ImageUsage,
+    },
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
         graphics::{
@@ -35,7 +39,7 @@ use vulkano::{
 };
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::EventLoop,
 };
 
 mod model;
@@ -153,24 +157,21 @@ fn main() {
 
     event_loop.run(move |event, _, control_flow| {
         match event {
-            Event::WindowEvent {
-                event: WindowEvent::Moved(_),
-                ..
-            } => {
-                recreate_swapchain_timer = Some(Instant::now());
-            }
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                *control_flow = ControlFlow::Exit;
-            }
-            Event::WindowEvent {
-                event: WindowEvent::Resized(_),
-                ..
-            } => {
-                recreate_swapchain = true;
-                recreate_swapchain_timer = Some(Instant::now());
+            Event::WindowEvent { event, .. } => {
+                if ctx.gui.update(&event) {
+                    return;
+                }
+                match event {
+                    WindowEvent::Moved(_) => {
+                        recreate_swapchain_timer = Some(Instant::now());
+                    }
+                    WindowEvent::CloseRequested => control_flow.set_exit(),
+                    WindowEvent::Resized(_) => {
+                        recreate_swapchain = true;
+                        recreate_swapchain_timer = Some(Instant::now());
+                    }
+                    _ => {}
+                }
             }
             Event::RedrawEventsCleared => {
                 if let Some(rst) = recreate_swapchain_timer {
@@ -178,6 +179,46 @@ fn main() {
                         return;
                     }
                 }
+
+                // gui
+                // let mut gui_result = MenuOption::None;
+                ctx.gui.immediate_ui(|gui| {
+                    let ctx = &gui.context();
+
+                    egui::Window::new("hi")
+                        .default_pos((20.0, 20.0))
+                        .show(ctx, |ui| {
+                            ui.label("new label");
+                        });
+                    // egui
+                    // ui::profiler_window(ctx);
+
+                    // let window_rect = Rect::from_center_size((500., 300.).into(), Vec2::splat(200.));
+                    // match self.game_state {
+                    //     GameState::MainMenu => ui::main_menu(ctx, &mut gui_result),
+                    //     GameState::Paused => ui::pause_menu(ctx, &mut gui_result),
+                    //     _ => {}
+                    // };
+                });
+                // match gui_result {
+                //     ui::MenuOption::None => {}
+                //     ui::MenuOption::LoadLevel(i) => match self.load_level(i) {
+                //         Ok(()) => {
+                //             self.game_state = GameState::Playing;
+                //             self.lock_cursor();
+                //             self.game_thread.set_paused(false);
+                //         }
+                //         Err(e) => println!("[Error] {e}"),
+                //     },
+                //     ui::MenuOption::QuitLevel => {
+                //         self.game_state = GameState::MainMenu;
+                //         // self.unlock_cursor();
+                //
+                //         let mut world = self.world.lock().unwrap();
+                //         world.clear();
+                //     }
+                //     ui::MenuOption::Quit => control_flow.set_exit(),
+                // }
 
                 let image_extent: [u32; 2] = ctx.window.inner_size().into();
 
@@ -278,6 +319,7 @@ fn main() {
                     CommandBufferUsage::OneTimeSubmit,
                 )
                 .unwrap();
+
                 builder
                     .begin_render_pass(
                         RenderPassBeginInfo {
@@ -317,6 +359,29 @@ fn main() {
                     .join(acquire_future)
                     .then_execute(ctx.queue.clone(), command_buffer)
                     .unwrap()
+                    // .then_swapchain_present(
+                    //     ctx.queue.clone(),
+                    //     SwapchainPresentInfo::swapchain_image_index(
+                    //         ctx.swapchain.clone(),
+                    //         image_index,
+                    //     ),
+                    // )
+                    .then_signal_fence_and_flush()
+                    .expect("future ..");
+
+                let image = &ctx.images[image_index as usize];
+                let gui_image_view = ImageView::new(
+                    image.clone(),
+                    ImageViewCreateInfo {
+                        format: vulkano::format::Format::B8G8R8A8_UNORM,
+                        ..ImageViewCreateInfo::from_image(image)
+                    },
+                )
+                .expect("gui image view");
+
+                let result = ctx
+                    .gui
+                    .draw_on_image(future, gui_image_view)
                     .then_swapchain_present(
                         ctx.queue.clone(),
                         SwapchainPresentInfo::swapchain_image_index(
@@ -326,7 +391,7 @@ fn main() {
                     )
                     .then_signal_fence_and_flush();
 
-                match future.map_err(Validated::unwrap) {
+                match result.map_err(Validated::unwrap) {
                     Ok(future) => {
                         previous_frame_end = Some(future.boxed());
                     }
