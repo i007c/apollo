@@ -71,6 +71,7 @@ fn main() {
         POSITIONS,
     )
     .unwrap();
+
     let normals_buffer = Buffer::from_iter(
         ctx.allocators.memory.clone(),
         BufferCreateInfo {
@@ -85,6 +86,7 @@ fn main() {
         NORMALS,
     )
     .unwrap();
+
     let index_buffer = Buffer::from_iter(
         ctx.allocators.memory.clone(),
         BufferCreateInfo {
@@ -153,7 +155,17 @@ fn main() {
     let mut recreate_swapchain_timer: Option<Instant> = None;
 
     let mut previous_frame_end = Some(sync::now(ctx.device.clone()).boxed());
-    let rotation_start = Instant::now();
+    // let rotation_start = Instant::now();
+
+    let mut slider_value = 7.0;
+    let mut ts = 0;
+    let mut scale = 0.01;
+
+    let mut view = Matrix4::look_at_rh(
+        Point3::new(0.3, 0.3, 1.0),
+        Point3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.0, -1.0, 0.0),
+    );
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -180,8 +192,6 @@ fn main() {
                     }
                 }
 
-                // gui
-                // let mut gui_result = MenuOption::None;
                 ctx.gui.immediate_ui(|gui| {
                     let ctx = &gui.context();
 
@@ -189,36 +199,52 @@ fn main() {
                         .default_pos((20.0, 20.0))
                         .show(ctx, |ui| {
                             ui.label("new label");
-                        });
-                    // egui
-                    // ui::profiler_window(ctx);
+                            ui.label(format!("ts: {ts}"));
+                            ui.add(
+                                egui::Slider::new(&mut slider_value, 0.0..=10.0)
+                                    .step_by(0.1)
+                                    .text("rotation"),
+                            );
+                            ui.add(
+                                egui::Slider::new(&mut scale, 0.001..=0.1)
+                                    .step_by(0.001)
+                                    .text("scale"),
+                            );
+                            macro_rules! value {
+                                ($path:expr, $text:literal) => {
+                            ui.add(
+                                egui::Slider::new($path, -4.0..=4.0)
+                                    .step_by(0.005)
+                                    .text($text),
+                            );        
+                                };
+                            }
 
-                    // let window_rect = Rect::from_center_size((500., 300.).into(), Vec2::splat(200.));
-                    // match self.game_state {
-                    //     GameState::MainMenu => ui::main_menu(ctx, &mut gui_result),
-                    //     GameState::Paused => ui::pause_menu(ctx, &mut gui_result),
-                    //     _ => {}
-                    // };
+                            value!(&mut view.x.x, "x.x");
+                            value!(&mut view.x.y, "x.y");
+                            value!(&mut view.x.z, "x.z");
+                            value!(&mut view.x.w, "x.w");
+
+                            value!(&mut view.y.x, "y.x");
+                            value!(&mut view.y.y, "y.y");
+                            value!(&mut view.y.z, "y.z");
+                            value!(&mut view.y.w, "y.w");
+
+                            value!(&mut view.z.x, "z.x");
+                            value!(&mut view.z.y, "z.y");
+                            value!(&mut view.z.z, "z.z");
+                            value!(&mut view.z.w, "z.w");
+
+                            value!(&mut view.w.x, "w.x");
+                            value!(&mut view.w.y, "w.y");
+                            value!(&mut view.w.z, "w.z");
+                            value!(&mut view.w.w, "w.w");
+
+                            if ui.button("quit").clicked() {
+                                control_flow.set_exit();
+                            }
+                        });
                 });
-                // match gui_result {
-                //     ui::MenuOption::None => {}
-                //     ui::MenuOption::LoadLevel(i) => match self.load_level(i) {
-                //         Ok(()) => {
-                //             self.game_state = GameState::Playing;
-                //             self.lock_cursor();
-                //             self.game_thread.set_paused(false);
-                //         }
-                //         Err(e) => println!("[Error] {e}"),
-                //     },
-                //     ui::MenuOption::QuitLevel => {
-                //         self.game_state = GameState::MainMenu;
-                //         // self.unlock_cursor();
-                //
-                //         let mut world = self.world.lock().unwrap();
-                //         world.clear();
-                //     }
-                //     ui::MenuOption::Quit => control_flow.set_exit(),
-                // }
 
                 let image_extent: [u32; 2] = ctx.window.inner_size().into();
 
@@ -229,6 +255,7 @@ fn main() {
                 previous_frame_end.as_mut().unwrap().cleanup_finished();
 
                 if recreate_swapchain {
+                    log::info!("recreating swapchain ...");
                     let (new_swapchain, new_images) = ctx
                         .swapchain
                         .recreate(SwapchainCreateInfo {
@@ -252,10 +279,9 @@ fn main() {
                 }
 
                 let uniform_buffer_subbuffer = {
-                    let elapsed = rotation_start.elapsed();
-                    let rotation =
-                        elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
-                    let rotation = Matrix3::from_angle_y(Rad(rotation as f32));
+                    // let elapsed = rotation_start.elapsed();
+                    // let rotation = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
+                    let rotation = Matrix3::from_angle_y(Rad(slider_value as f32));
 
                     // note: this teapot was meant for OpenGL where the origin is at the lower left
                     //       instead the origin is at the upper left in Vulkan, so we reverse the Y axis
@@ -267,12 +293,8 @@ fn main() {
                         0.01,
                         100.0,
                     );
-                    let view = Matrix4::look_at_rh(
-                        Point3::new(0.3, 0.3, 1.0),
-                        Point3::new(0.0, 0.0, 0.0),
-                        Vector3::new(0.0, -1.0, 0.0),
-                    );
-                    let scale = Matrix4::from_scale(0.01);
+
+                    let scale = Matrix4::from_scale(scale);
 
                     let uniform_data = shader::vs::Data {
                         world: Matrix4::from(rotation).into(),
@@ -379,6 +401,8 @@ fn main() {
                 )
                 .expect("gui image view");
 
+                let now = Instant::now();
+
                 let result = ctx
                     .gui
                     .draw_on_image(future, gui_image_view)
@@ -390,6 +414,8 @@ fn main() {
                         ),
                     )
                     .then_signal_fence_and_flush();
+
+                ts = now.elapsed().as_micros();
 
                 match result.map_err(Validated::unwrap) {
                     Ok(future) => {
