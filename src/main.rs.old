@@ -1,0 +1,23 @@
+use winit::event_loop::EventLoop;
+
+mod app;
+mod logger;
+mod model;
+mod object;
+mod render;
+mod shader;
+mod utils;
+
+fn main() {
+    // unsafe { std::env::set_var("RUST_LOG", "DEBUG") };
+    log::set_logger(&logger::MasterLogger).expect("log failed");
+    log::set_max_level(log::LevelFilter::Debug);
+
+    // #[cfg(unix)]
+    // Command::new("notify-send").arg("apollo").spawn().unwrap();
+
+    let event_loop = EventLoop::new().expect("event_loop failed");
+
+    let mut aapp = app::ApolloApp::new(&event_loop);
+    event_loop.run_app(&mut aapp).expect("run_app err");
+}

@@ -1,29 +1,46 @@
-use cgmath::{Matrix3, Matrix4, Point3, Rad, Vector3};
-use egui_winit_vulkano::egui;
-use model::{INDICES, NORMALS, Normal, POSITIONS, Position};
-use std::{process::Command, sync::Arc, time::Instant};
+// Copyright (c) 2021 Okko Hakola
+// Licensed under the Apache License, Version 2.0
+// <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT
+// license <LICENSE-MIT or https://opensource.org/licenses/MIT>,
+// at your option. All files in the project carrying such
+// notice may not be copied, modified, or distributed except
+// according to those terms.
+
+#![allow(clippy::eq_op)]
+
+use std::sync::Arc;
+
+use egui::{
+    Align, Align2, Color32, CornerRadius, Frame, Margin, Window,
+    epaint::Shadow, vec2,
+};
+use egui_winit_vulkano::{Gui, GuiConfig};
 use vulkano::{
-    Validated, VulkanError,
     buffer::{
-        Buffer, BufferCreateInfo, BufferUsage,
-        allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo},
+        Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer,
     },
-    command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo},
-    descriptor_set::WriteDescriptorSet,
-    device::DeviceOwned,
+    command_buffer::{
+        AutoCommandBufferBuilder, CommandBufferInheritanceInfo,
+        CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
+        SubpassContents,
+        allocator::{
+            StandardCommandBufferAllocator,
+            StandardCommandBufferAllocatorCreateInfo,
+        },
+    },
+    device::{Device, Queue},
     format::Format,
-    image::{
-        Image, ImageCreateInfo, ImageType, ImageUsage,
-        view::{ImageView, ImageViewCreateInfo},
+    image::{SampleCount, view::ImageView},
+    memory::allocator::{
+        AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator,
     },
-    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
-        GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout,
+        DynamicState, GraphicsPipeline, PipelineLayout,
         PipelineShaderStageCreateInfo,
         graphics::{
             GraphicsPipelineCreateInfo,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
-            depth_stencil::{DepthState, DepthStencilState},
             input_assembly::InputAssemblyState,
             multisample::MultisampleState,
             rasterization::RasterizationState,
@@ -33,477 +50,278 @@ use vulkano::{
         layout::PipelineDescriptorSetLayoutCreateInfo,
     },
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
-    shader::EntryPoint,
-    swapchain::{SwapchainCreateInfo, SwapchainPresentInfo, acquire_next_image},
-    sync::{self, GpuFuture},
+    sync::GpuFuture,
+};
+use vulkano_util::{
+    context::{VulkanoConfig, VulkanoContext},
+    window::{VulkanoWindows, WindowDescriptor},
 };
 use winit::{
-    event::{Event, WindowEvent},
+    application::ApplicationHandler, error::EventLoopError, event::WindowEvent,
     event_loop::EventLoop,
 };
+// Render a triangle (scene) and a gui from a subpass on top of it (with some transparent fill)
 
-mod logger;
-mod model;
-mod object;
-mod render;
-mod shader;
-mod app;
-mod utils;
+pub struct App {
+    context: VulkanoContext,
+    windows: VulkanoWindows,
+    gui_pipeline: Option<SimpleGuiPipeline>,
+    gui: Option<Gui>,
+}
 
-fn main() {
-    unsafe { std::env::set_var("RUST_LOG", "DEBUG") };
-    log::set_logger(&logger::MasterLogger);
+impl Default for App {
+    fn default() -> Self {
+        // Vulkano context
+        let context = VulkanoContext::new(VulkanoConfig::default());
 
-    #[cfg(unix)]
-    Command::new("notify-send").arg("apollo").spawn().unwrap();
+        // Vulkano windows
+        let windows = VulkanoWindows::default();
 
-    let event_loop = EventLoop::new().expect("event_loop failed");
-    let mut ctx = render::context::RenderContext::init(&event_loop);
+        Self { context, windows, gui_pipeline: None, gui: None }
+    }
+}
 
-    let vertex_buffer = Buffer::from_iter(
-        ctx.allocators.memory.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::VERTEX_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        POSITIONS,
-    )
-    .unwrap();
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let mut des = WindowDescriptor::default();
+        des.title = "00-team-test-app".to_string();
+        self.windows.create_window(event_loop, &self.context, &des, |ci| {
+            ci.image_format = vulkano::format::Format::B8G8R8A8_UNORM;
+            ci.min_image_count = ci.min_image_count.max(2);
+        });
 
-    let normals_buffer = Buffer::from_iter(
-        ctx.allocators.memory.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::VERTEX_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        NORMALS,
-    )
-    .unwrap();
+        // Create out gui pipeline
+        let gui_pipeline = SimpleGuiPipeline::new(
+            self.context.graphics_queue().clone(),
+            self.windows.get_primary_renderer_mut().unwrap().swapchain_format(),
+            self.context.memory_allocator(),
+        );
 
-    let index_buffer = Buffer::from_iter(
-        ctx.allocators.memory.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::INDEX_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        INDICES,
-    )
-    .unwrap();
+        // Create gui subpass
+        self.gui = Some(Gui::new_with_subpass(
+            event_loop,
+            self.windows.get_primary_renderer_mut().unwrap().surface(),
+            self.windows.get_primary_renderer_mut().unwrap().graphics_queue(),
+            gui_pipeline.gui_pass(),
+            self.windows.get_primary_renderer_mut().unwrap().swapchain_format(),
+            GuiConfig::default(),
+        ));
 
-    let uniform_buffer = SubbufferAllocator::new(
-        ctx.allocators.memory.clone(),
-        SubbufferAllocatorCreateInfo {
-            buffer_usage: BufferUsage::UNIFORM_BUFFER,
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-    );
+        self.gui_pipeline = Some(gui_pipeline);
+    }
 
-    let render_pass = vulkano::single_pass_renderpass!(
-        ctx.device.clone(),
-        attachments: {
-            color: {
-                format: ctx.swapchain.image_format(),
-                samples: 1,
-                load_op: Clear,
-                store_op: Store,
-            },
-            depth_stencil: {
-                format: Format::D16_UNORM,
-                samples: 1,
-                load_op: Clear,
-                store_op: DontCare,
-            },
-        },
-        pass: {
-            color: [color],
-            depth_stencil: {depth_stencil},
-        },
-    )
-    .unwrap();
+    fn window_event(
+        &mut self, event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId, event: WindowEvent,
+    ) {
+        let renderer = self.windows.get_renderer_mut(window_id).unwrap();
 
-    let vs = shader::vs::load(ctx.device.clone())
-        .unwrap()
-        .entry_point("main")
-        .unwrap();
-    let fs = shader::fs::load(ctx.device.clone())
-        .unwrap()
-        .entry_point("main")
-        .unwrap();
+        let gui = self.gui.as_mut().unwrap();
+        if gui.update(&event) {
+            return;
+        }
 
-    let (mut pipeline, mut framebuffers) = window_size_dependent_setup(
-        ctx.allocators.memory.clone(),
-        vs.clone(),
-        fs.clone(),
-        &ctx.images,
-        render_pass.clone(),
-    );
-    let mut recreate_swapchain = false;
-    let mut recreate_swapchain_timer: Option<Instant> = None;
-
-    let mut previous_frame_end = Some(sync::now(ctx.device.clone()).boxed());
-    // let rotation_start = Instant::now();
-
-    let mut slider_value = 7.0;
-    let mut ts = 0;
-    let mut scale = 0.01;
-
-    let mut view = Matrix4::look_at_rh(
-        Point3::new(0.3, 0.3, 1.0),
-        Point3::new(0.0, 0.0, 0.0),
-        Vector3::new(0.0, -1.0, 0.0),
-    );
-
-    let mut aapp = app::ApolloApp::new();
-    event_loop.run_app(&mut aapp);
-    event_loop.run(move |event, _, control_flow| {
         match event {
-            Event::WindowEvent { event, .. } => {
-                if ctx.gui.update(&event) {
-                    return;
-                }
-                match event {
-                    WindowEvent::Moved(_) => {
-                        recreate_swapchain_timer = Some(Instant::now());
-                    }
-                    WindowEvent::CloseRequested => control_flow.set_exit(),
-                    WindowEvent::Resized(_) => {
-                        recreate_swapchain = true;
-                        recreate_swapchain_timer = Some(Instant::now());
-                    }
-                    _ => {}
-                }
+            WindowEvent::Resized(_) => {
+                renderer.resize();
             }
-            Event::RedrawEventsCleared => {
-                if let Some(rst) = recreate_swapchain_timer {
-                    if rst.elapsed().as_millis() < 100 {
-                        return;
-                    }
-                }
-
-                ctx.gui.immediate_ui(|gui| {
-                    let ctx = &gui.context();
-
-                    egui::Window::new("hi")
-                        .default_pos((20.0, 20.0))
-                        .show(ctx, |ui| {
-                            ui.label("new label");
-                            ui.label(format!("ts: {ts}"));
-                            ui.add(
-                                egui::Slider::new(&mut slider_value, 0.0..=10.0)
-                                    .step_by(0.1)
-                                    .text("rotation"),
-                            );
-                            ui.add(
-                                egui::Slider::new(&mut scale, 0.001..=0.1)
-                                    .step_by(0.001)
-                                    .text("scale"),
-                            );
-                            macro_rules! value {
-                                ($path:expr, $text:literal) => {
-                                    ui.add(
-                                        egui::Slider::new($path, -4.0..=4.0)
-                                            .step_by(0.005)
-                                            .text($text),
-                                    );
-                                };
-                            }
-
-                            value!(&mut view.x.x, "x.x");
-                            value!(&mut view.x.y, "x.y");
-                            value!(&mut view.x.z, "x.z");
-                            value!(&mut view.x.w, "x.w");
-
-                            value!(&mut view.y.x, "y.x");
-                            value!(&mut view.y.y, "y.y");
-                            value!(&mut view.y.z, "y.z");
-                            value!(&mut view.y.w, "y.w");
-
-                            value!(&mut view.z.x, "z.x");
-                            value!(&mut view.z.y, "z.y");
-                            value!(&mut view.z.z, "z.z");
-                            value!(&mut view.z.w, "z.w");
-
-                            value!(&mut view.w.x, "w.x");
-                            value!(&mut view.w.y, "w.y");
-                            value!(&mut view.w.z, "w.z");
-                            value!(&mut view.w.w, "w.w");
-
-                            if ui.button("quit").clicked() {
-                                control_flow.set_exit();
-                            }
+            WindowEvent::ScaleFactorChanged { .. } => {
+                renderer.resize();
+            }
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            WindowEvent::RedrawRequested => {
+                // Set immediate UI in redraw here
+                gui.immediate_ui(|gui| {
+                    let ctx = gui.context();
+                    egui::Window::new("Settings")
+                        .default_open(false)
+                        .scroll([true, true])
+                        .constrain(true)
+                        .show(&ctx, |ui| ctx.settings_ui(ui));
+                    Window::new("Transparent Window")
+                        .resizable(true)
+                        .default_width(300.0)
+                        .movable(true)
+                        // .frame(
+                        //     Frame::NONE
+                        //         .fill(Color32::from_white_alpha(125))
+                        //         .shadow(Shadow {
+                        //             spread: 8,
+                        //             blur: 10,
+                        //             color: Color32::from_black_alpha(125),
+                        //             ..Default::default()
+                        //         })
+                        //         .corner_radius(CornerRadius::same(5))
+                        //         .inner_margin(Margin::same(10)),
+                        // )
+                        .show(&ctx, |ui| {
+                            ui.label("hi");
+                            // ui.colored_label(Color32::BLACK, "Content :)");
                         });
                 });
 
-                let image_extent: [u32; 2] = ctx.window.inner_size().into();
-
-                if image_extent.contains(&0) {
-                    return;
-                }
-
-                previous_frame_end.as_mut().unwrap().cleanup_finished();
-
-                if recreate_swapchain {
-                    log::info!("recreating swapchain ...");
-                    let (new_swapchain, new_images) = ctx
-                        .swapchain
-                        .recreate(SwapchainCreateInfo {
-                            image_extent,
-                            ..ctx.swapchain.create_info()
-                        })
-                        .expect("failed to recreate swapchain");
-
-                    ctx.swapchain = new_swapchain;
-                    let (new_pipeline, new_framebuffers) = window_size_dependent_setup(
-                        ctx.allocators.memory.clone(),
-                        vs.clone(),
-                        fs.clone(),
-                        &new_images,
-                        render_pass.clone(),
-                    );
-                    pipeline = new_pipeline;
-                    framebuffers = new_framebuffers;
-                    recreate_swapchain = false;
-                    recreate_swapchain_timer = None;
-                }
-
-                log::info!("uniform buffer subbuffer");
-                let uniform_buffer_subbuffer = {
-                    // let elapsed = rotation_start.elapsed();
-                    // let rotation = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
-                    let rotation = Matrix3::from_angle_y(Rad(slider_value as f32));
-
-                    // note: this teapot was meant for OpenGL where the origin is at the lower left
-                    //       instead the origin is at the upper left in Vulkan, so we reverse the Y axis
-                    let aspect_ratio = ctx.swapchain.image_extent()[0] as f32
-                        / ctx.swapchain.image_extent()[1] as f32;
-                    let proj = cgmath::perspective(
-                        Rad(std::f32::consts::FRAC_PI_2),
-                        aspect_ratio,
-                        0.01,
-                        100.0,
-                    );
-
-                    let scale = Matrix4::from_scale(scale);
-
-                    let uniform_data = shader::vs::Data {
-                        world: Matrix4::from(rotation).into(),
-                        view: (view * scale).into(),
-                        proj: proj.into(),
-                    };
-
-                    let subbuffer = uniform_buffer.allocate_sized().unwrap();
-                    *subbuffer.write().unwrap() = uniform_data;
-
-                    subbuffer
-                };
-
-                let layout = pipeline.layout().set_layouts().get(0).unwrap();
-                let set = PersistentDescriptorSet::new(
-                    &ctx.allocators.descriptor_set,
-                    layout.clone(),
-                    [WriteDescriptorSet::buffer(0, uniform_buffer_subbuffer)],
-                    [],
-                )
-                .unwrap();
-
-                log::info!("next image");
-                let (image_index, suboptimal, acquire_future) = match acquire_next_image(
-                    ctx.swapchain.clone(),
-                    None,
-                )
-                .map_err(Validated::unwrap)
+                // Acquire swapchain future
+                match renderer
+                    .acquire(Some(std::time::Duration::from_millis(10)), |_| {})
                 {
-                    Ok(r) => r,
-                    Err(VulkanError::OutOfDate) => {
-                        recreate_swapchain = true;
-                        return;
-                    }
-                    Err(e) => panic!("failed to acquire next image: {e}"),
-                };
-
-                if suboptimal {
-                    recreate_swapchain = true;
-                }
-
-                log::info!("auto command");
-                let mut builder = AutoCommandBufferBuilder::primary(
-                    Arc::new(ctx.allocators.command_buffer),
-                    ctx.queue.queue_family_index(),
-                    CommandBufferUsage::OneTimeSubmit,
-                )
-                .unwrap();
-
-                builder
-                    .begin_render_pass(
-                        RenderPassBeginInfo {
-                            clear_values: vec![
-                                Some([0.015, 0.015, 0.015, 1.0].into()),
-                                Some(1f32.into()),
-                            ],
-                            ..RenderPassBeginInfo::framebuffer(
-                                framebuffers[image_index as usize].clone(),
-                            )
-                        },
-                        Default::default(),
-                    )
-                    .unwrap()
-                    .bind_pipeline_graphics(pipeline.clone())
-                    .unwrap()
-                    .bind_descriptor_sets(
-                        PipelineBindPoint::Graphics,
-                        pipeline.layout().clone(),
-                        0,
-                        set,
-                    )
-                    .unwrap()
-                    .bind_vertex_buffers(0, (vertex_buffer.clone(), normals_buffer.clone()))
-                    .unwrap()
-                    .bind_index_buffer(index_buffer.clone())
-                    .unwrap()
-                    .draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0)
-                    .unwrap()
-                    .end_render_pass(Default::default())
-                    .unwrap();
-                let command_buffer = builder.build().unwrap();
-
-                log::info!("future");
-                let future = previous_frame_end
-                    .take()
-                    .unwrap()
-                    .join(acquire_future)
-                    .then_execute(ctx.queue.clone(), command_buffer)
-                    .unwrap()
-                    // .then_swapchain_present(
-                    //     ctx.queue.clone(),
-                    //     SwapchainPresentInfo::swapchain_image_index(
-                    //         ctx.swapchain.clone(),
-                    //         image_index,
-                    //     ),
-                    // )
-                    .then_signal_fence_and_flush()
-                    .expect("future ..");
-
-                let image = &ctx.images[image_index as usize];
-                log::info!("iv cf");
-                let iv_create_info = ImageViewCreateInfo {
-                    // format: vulkano::format::Format::B8G8R8A8_UNORM,
-                    format: vulkano::format::Format::B8G8R8A8_SRGB,
-                    ..ImageViewCreateInfo::from_image(image)
-                };
-                log::info!("image view");
-                println!("hi");
-                log::info!("image: {image:?}");
-                let gui_iv = ImageView::new(image.clone(), iv_create_info).expect("gui image view");
-
-                let now = Instant::now();
-
-                log::info!("context draw future");
-                let result = ctx
-                    .gui
-                    .draw_on_image(future, gui_iv)
-                    .then_swapchain_present(
-                        ctx.queue.clone(),
-                        SwapchainPresentInfo::swapchain_image_index(
-                            ctx.swapchain.clone(),
-                            image_index,
-                        ),
-                    )
-                    .then_signal_fence_and_flush();
-
-                ts = now.elapsed().as_micros();
-
-                log::info!("check result");
-                match result.map_err(Validated::unwrap) {
                     Ok(future) => {
-                        previous_frame_end = Some(future.boxed());
+                        // Render gui
+                        let after_future =
+                            self.gui_pipeline.as_mut().unwrap().render(
+                                future,
+                                renderer.swapchain_image_view(),
+                                gui,
+                            );
+
+                        // Present swapchain
+                        renderer.present(after_future, true);
                     }
-                    Err(VulkanError::OutOfDate) => {
-                        log::warn!("out of data");
-                        recreate_swapchain = true;
-                        previous_frame_end = Some(sync::now(ctx.device.clone()).boxed());
+                    Err(vulkano::VulkanError::OutOfDate) => {
+                        renderer.resize();
                     }
                     Err(e) => {
-                        log::error!("failed to flush future: {e} = {e:?}");
-                        previous_frame_end = Some(sync::now(ctx.device.clone()).boxed());
+                        panic!("Failed to acquire swapchain future: {}", e)
                     }
-                }
+                };
             }
             _ => (),
         }
-    });
+
+        if window_id == renderer.window().id() {
+            // Update Egui integration so the UI works!
+            let _pass_events_to_game = !gui.update(&event);
+        }
+    }
+
+    fn about_to_wait(
+        &mut self, _event_loop: &winit::event_loop::ActiveEventLoop,
+    ) {
+        let renderer = self.windows.get_primary_renderer().unwrap();
+
+        renderer.window().request_redraw();
+    }
 }
 
-/// This function is called once during initialization, then again whenever the window is resized.
-fn window_size_dependent_setup(
-    memory_allocator: Arc<StandardMemoryAllocator>,
-    vs: EntryPoint,
-    fs: EntryPoint,
-    images: &[Arc<Image>],
-    render_pass: Arc<RenderPass>,
-) -> (Arc<GraphicsPipeline>, Vec<Arc<Framebuffer>>) {
-    let device = memory_allocator.device().clone();
-    let extent = images[0].extent();
+pub fn main() -> Result<(), EventLoopError> {
+    // Winit event loop
+    let event_loop = EventLoop::new().unwrap();
 
-    let depth_buffer = ImageView::new_default(
-        Image::new(
-            memory_allocator,
-            ImageCreateInfo {
-                image_type: ImageType::Dim2d,
-                format: Format::D16_UNORM,
-                extent: images[0].extent(),
-                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+    let mut app = App::default();
+
+    event_loop.run_app(&mut app)
+}
+
+struct SimpleGuiPipeline {
+    queue: Arc<Queue>,
+    render_pass: Arc<RenderPass>,
+    pipeline: Arc<GraphicsPipeline>,
+    subpass: Subpass,
+    vertex_buffer: Subbuffer<[MyVertex]>,
+    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+}
+
+impl SimpleGuiPipeline {
+    pub fn new(
+        queue: Arc<Queue>, image_format: vulkano::format::Format,
+        allocator: &Arc<StandardMemoryAllocator>,
+    ) -> Self {
+        let render_pass =
+            Self::create_render_pass(queue.device().clone(), image_format);
+        let (pipeline, subpass) =
+            Self::create_pipeline(queue.device().clone(), render_pass.clone());
+
+        let vertex_buffer = Buffer::from_iter(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER,
                 ..Default::default()
             },
-            AllocationCreateInfo::default(),
-        )
-        .unwrap(),
-    )
-    .unwrap();
-
-    let framebuffers = images
-        .iter()
-        .map(|image| {
-            let view = ImageView::new_default(image.clone()).unwrap();
-            Framebuffer::new(
-                render_pass.clone(),
-                FramebufferCreateInfo {
-                    attachments: vec![view, depth_buffer.clone()],
-                    ..Default::default()
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            [
+                MyVertex {
+                    position: [-0.5, -0.25],
+                    color: [1.0, 0.0, 0.0, 1.0],
                 },
-            )
-            .unwrap()
-        })
-        .collect::<Vec<_>>();
+                MyVertex { position: [0.0, 0.5], color: [0.0, 1.0, 0.0, 1.0] },
+                MyVertex {
+                    position: [0.25, -0.1],
+                    color: [0.0, 0.0, 1.0, 1.0],
+                },
+            ],
+        )
+        .unwrap();
 
-    // In the triangle example we use a dynamic viewport, as its a simple example. However in the
-    // teapot example, we recreate the pipelines with a hardcoded viewport instead. This allows the
-    // driver to optimize things, at the cost of slower window resizes.
-    // https://computergraphics.stackexchange.com/questions/5742/vulkan-best-way-of-updating-pipeline-viewport
-    let pipeline = {
-        let vertex_input_state = [Position::per_vertex(), Normal::per_vertex()]
-            .definition(&vs.info().input_interface)
+        // Create an allocator for command-buffer data
+        let command_buffer_allocator = StandardCommandBufferAllocator::new(
+            queue.device().clone(),
+            StandardCommandBufferAllocatorCreateInfo {
+                secondary_buffer_count: 32,
+                ..Default::default()
+            },
+        )
+        .into();
+
+        Self {
+            queue,
+            render_pass,
+            pipeline,
+            subpass,
+            vertex_buffer,
+            command_buffer_allocator,
+        }
+    }
+
+    fn create_render_pass(
+        device: Arc<Device>, format: Format,
+    ) -> Arc<RenderPass> {
+        vulkano::ordered_passes_renderpass!(
+            device,
+            attachments: {
+                color: {
+                    format: format,
+                    samples: SampleCount::Sample1,
+                    load_op: Clear,
+                    store_op: Store,
+                }
+            },
+            passes: [
+                { color: [color], depth_stencil: {}, input: [] }, // Draw what you want on this pass
+                { color: [color], depth_stencil: {}, input: [] } // Gui render pass
+            ]
+        )
+        .unwrap()
+    }
+
+    fn gui_pass(&self) -> Subpass {
+        Subpass::from(self.render_pass.clone(), 1).unwrap()
+    }
+
+    fn create_pipeline(
+        device: Arc<Device>, render_pass: Arc<RenderPass>,
+    ) -> (Arc<GraphicsPipeline>, Subpass) {
+        let vs = vs::load(device.clone())
+            .expect("failed to create shader module")
+            .entry_point("main")
             .unwrap();
+        let fs = fs::load(device.clone())
+            .expect("failed to create shader module")
+            .entry_point("main")
+            .unwrap();
+
+        let vertex_input_state =
+            MyVertex::per_vertex().definition(&vs).unwrap();
+
         let stages = [
             PipelineShaderStageCreateInfo::new(vs),
             PipelineShaderStageCreateInfo::new(fs),
         ];
+
         let layout = PipelineLayout::new(
             device.clone(),
             PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
@@ -511,41 +329,168 @@ fn window_size_dependent_setup(
                 .unwrap(),
         )
         .unwrap();
-        let subpass = Subpass::from(render_pass, 0).unwrap();
 
-        GraphicsPipeline::new(
-            device,
-            None,
-            GraphicsPipelineCreateInfo {
-                stages: stages.into_iter().collect(),
-                vertex_input_state: Some(vertex_input_state),
-                input_assembly_state: Some(InputAssemblyState::default()),
-                viewport_state: Some(ViewportState {
-                    viewports: [Viewport {
-                        offset: [0.0, 0.0],
-                        extent: [extent[0] as f32, extent[1] as f32],
-                        depth_range: 0.0..=1.0,
-                    }]
-                    .into_iter()
-                    .collect(),
-                    ..Default::default()
-                }),
-                rasterization_state: Some(RasterizationState::default()),
-                depth_stencil_state: Some(DepthStencilState {
-                    depth: Some(DepthState::simple()),
-                    ..Default::default()
-                }),
-                multisample_state: Some(MultisampleState::default()),
-                color_blend_state: Some(ColorBlendState::with_attachment_states(
-                    subpass.num_color_attachments(),
-                    ColorBlendAttachmentState::default(),
-                )),
-                subpass: Some(subpass.into()),
-                ..GraphicsPipelineCreateInfo::layout(layout)
+        let subpass = Subpass::from(render_pass, 0).unwrap();
+        (
+            GraphicsPipeline::new(
+                device,
+                None,
+                GraphicsPipelineCreateInfo {
+                    stages: stages.into_iter().collect(),
+                    vertex_input_state: Some(vertex_input_state),
+                    input_assembly_state: Some(InputAssemblyState::default()),
+                    viewport_state: Some(ViewportState::default()),
+                    rasterization_state: Some(RasterizationState::default()),
+                    multisample_state: Some(MultisampleState::default()),
+                    color_blend_state: Some(
+                        ColorBlendState::with_attachment_states(
+                            subpass.num_color_attachments(),
+                            ColorBlendAttachmentState::default(),
+                        ),
+                    ),
+                    dynamic_state: [DynamicState::Viewport]
+                        .into_iter()
+                        .collect(),
+                    subpass: Some(subpass.clone().into()),
+                    ..GraphicsPipelineCreateInfo::layout(layout)
+                },
+            )
+            .unwrap(),
+            subpass,
+        )
+    }
+
+    pub fn render(
+        &mut self, before_future: Box<dyn GpuFuture>, image: Arc<ImageView>,
+        gui: &mut Gui,
+    ) -> Box<dyn GpuFuture> {
+        let mut builder = AutoCommandBufferBuilder::primary(
+            self.command_buffer_allocator.clone(),
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        let dimensions = image.image().extent();
+        let framebuffer = Framebuffer::new(
+            self.render_pass.clone(),
+            FramebufferCreateInfo {
+                attachments: vec![image],
+                ..Default::default()
             },
         )
-        .unwrap()
-    };
+        .unwrap();
 
-    (pipeline, framebuffers)
+        // Begin render pipeline commands
+        builder
+            .begin_render_pass(
+                RenderPassBeginInfo {
+                    clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
+                    ..RenderPassBeginInfo::framebuffer(framebuffer)
+                },
+                SubpassBeginInfo {
+                    contents: SubpassContents::SecondaryCommandBuffers,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        // Render first draw pass
+        let mut secondary_builder = AutoCommandBufferBuilder::secondary(
+            self.command_buffer_allocator.clone(),
+            self.queue.queue_family_index(),
+            CommandBufferUsage::MultipleSubmit,
+            CommandBufferInheritanceInfo {
+                render_pass: Some(self.subpass.clone().into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        secondary_builder
+            .bind_pipeline_graphics(self.pipeline.clone())
+            .unwrap()
+            .set_viewport(
+                0,
+                [Viewport {
+                    offset: [0.0, 0.0],
+                    extent: [dimensions[0] as f32, dimensions[1] as f32],
+                    depth_range: 0.0..=1.0,
+                }]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap()
+            .bind_vertex_buffers(0, self.vertex_buffer.clone())
+            .unwrap();
+        unsafe {
+            secondary_builder
+                .draw(self.vertex_buffer.len() as u32, 1, 0, 0)
+                .unwrap();
+        }
+        let cb = secondary_builder.build().unwrap();
+        builder.execute_commands(cb).unwrap();
+
+        // Move on to next subpass for gui
+        builder
+            .next_subpass(
+                Default::default(),
+                SubpassBeginInfo {
+                    contents: SubpassContents::SecondaryCommandBuffers,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        // Draw gui on subpass
+        let cb = gui.draw_on_subpass_image([dimensions[0], dimensions[1]]);
+        builder.execute_commands(cb).unwrap();
+
+        // Last end render pass
+        builder.end_render_pass(Default::default()).unwrap();
+        let command_buffer = builder.build().unwrap();
+        let after_future = before_future
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap();
+
+        after_future.boxed()
+    }
+}
+
+#[repr(C)]
+#[derive(BufferContents, Vertex)]
+struct MyVertex {
+    #[format(R32G32_SFLOAT)]
+    position: [f32; 2],
+    #[format(R32G32B32A32_SFLOAT)]
+    color: [f32; 4],
+}
+
+mod vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        src: "
+#version 450
+layout(location = 0) in vec2 position;
+layout(location = 1) in vec4 color;
+
+layout(location = 0) out vec4 v_color;
+void main() {
+    gl_Position = vec4(position, 0.0, 1.0);
+    v_color = color;
+}"
+    }
+}
+
+mod fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        src: "
+#version 450
+layout(location = 0) in vec4 v_color;
+
+layout(location = 0) out vec4 f_color;
+
+void main() {
+    f_color = v_color;
+}"
+    }
 }
