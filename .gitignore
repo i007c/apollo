@@ -1,4 +1,3 @@
-object/
 shader/spv/
 debug/
 target/
@@ -10,3 +9,4 @@ Cargo.lock
 logs/
 __pycache__/
 data/
+object-data/

@@ -9,8 +9,8 @@ use vulkano::{
     swapchain::{Surface, Swapchain},
 };
 use winit::{
-    event_loop::EventLoop,
-    window::{Window, WindowBuilder},
+    event_loop::ActiveEventLoop,
+    window::{Window, WindowAttributes},
 };
 
 use crate::object::{allocators::Allocators, device, instance, swapchain};
@@ -28,14 +28,19 @@ pub struct RenderContext {
 }
 
 impl RenderContext {
-    pub fn init(event_loop: &EventLoop<()>) -> Self {
+    pub fn init(event_loop: &ActiveEventLoop) -> Self {
         let instance = instance::new(event_loop);
         let window = Arc::new(
-            WindowBuilder::new()
-                .with_title("Apollo")
-                .build(event_loop)
-                .expect("window build"),
+            event_loop
+                .create_window(WindowAttributes::default().with_title("00-team-test-app"))
+                .expect("create window"),
         );
+        // let window = Arc::new(
+        //     WindowBuilder::new()
+        //         .with_title("00-team-test-app")
+        //         .build(event_loop)
+        //         .expect("window build"),
+        // );
         let surface =
             Surface::from_window(instance.clone(), window.clone()).expect("surface from window");
 
